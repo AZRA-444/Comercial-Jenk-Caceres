@@ -1,143 +1,129 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prueba en Vercel - Facturas Temporales</title>
-    <style>
-        body { font-family: monospace; padding: 20px; background-color: #f9f9f9; }
-        .factura-card { 
-            background: white; 
-            border: 1px solid #ccc; 
-            padding: 15px; 
-            margin-bottom: 20px; 
-            border-radius: 5px;
-        }
-        .productos-lista { margin-top: 10px; border-left: 3px solid #007bff; padding-left: 10px; }
-        .btn { padding: 8px 12px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px; }
-        .btn:hover { background: #0056b3; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
-    </style>
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/main.css" />
+    <title>Verificación de Pagos</title>
+  </head>
 
-    <h1>📋 Facturas Temporales Pendientes</h1>
-    <button class="btn" onclick="cargarFacturas()">🔄 Recargar Facturas</button>
-    <br><br>
+  <body>
+    <main>
+      <div class="main-card">
+        <header class="invoice-header">
+          <div>
+            <h1>Verificación de Facturas</h1>
+            <p class="subtitle">Busca y gestiona las facturas pendientes o registradas</p>
+          </div>
+          <div class="form-actions-row">
+            <a href="../../index.html" class="btn-secondary">
+              <i class="fas fa-arrow-left"></i> Volver
+            </a>
+          </div>
+        </header>
 
-    <div id="cargando">Cargando facturas desde Vercel...</div>
-    <div id="contenedor-facturas"></div>
+        <!-- Sección de Búsqueda / Filtro -->
+        <section class="invoice-section">
+          <h2>Buscar Factura</h2>
+          <div class="form-billing-grid">
+            <label class="form-field" style="grid-column: span 3;">
+              ID de Factura o Cédula
+              <input
+                type="text"
+                id="inputBusqueda"
+                placeholder="Ingrese ID de factura o cédula del cliente..."
+              />
+            </label>
+            <div class="form-actions-row" style="align-items: flex-end;">
+              <button class="btn-primary" onclick="buscarFactura()">
+                <i class="fas fa-search"></i> Buscar
+              </button>
+            </div>
+          </div>
+        </section>
 
-    <script>
-        // Usamos rutas relativas. Vercel automáticamente lo resolverá a tu dominio 
-        // (ej. https://tu-proyecto.vercel.app/api/consultar-temporales)
+        <!-- Sección de Resultados / Presentación Mejorada -->
+        <section id="seccionResultado" class="invoice-section">
+          <h2>Detalle de la Verificación</h2>
+          
+          <!-- Contenedor de la Tarjeta de Información del Cliente / Factura -->
+          <div id="infoFacturaContainer" class="client-summary" style="margin-bottom: 20px; display: none;">
+            <!-- Se inyectarán dinámicamente los datos generales -->
+          </div>
 
-        // Función GET para obtener las facturas temporales
-        async function cargarFacturas() {
-            const contenedor = document.getElementById('contenedor-facturas');
-            const cargando = document.getElementById('cargando');
-            
-            contenedor.innerHTML = '';
-            cargando.style.display = 'block';
+          <!-- Tabla de Productos de la Factura -->
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cant.</th>
+                  <th>Producto</th>
+                  <th>UND $</th>
+                  <th>Total $</th>
+                  <th>Total Bs</th>
+                </tr>
+              </thead>
+              <tbody id="tablaVerificacionProductos">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: #888;">No hay factura seleccionada o cargada.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-            try {
-                // Ruta relativa directa a la función serverless de Vercel
-                const response = await fetch('/api/gestion-temporales');
-                const json = await response.json();
+          <!-- Totales y Acciones de Edición/Verificación -->
+          <div id="totalesVerificacion" class="invoice-totals"></div>
 
-                cargando.style.display = 'none';
+          <div class="form-actions-row" style="margin-top: 20px; justify-content: flex-end;" id="accionesVerificacion">
+            <!-- Botones de acción controlados por permisos (Editar / Aprobar) -->
+          </div>
+        </section>
+      </div>
+    </main>
 
-                if (json.status === "success") {
-                    renderizarFacturas(json.data);
-                } else {
-                    contenedor.innerHTML = `<p style="color:red;">Error del servidor: ${json.message}</p>`;
-                }
-            } catch (error) {
-                cargando.style.display = 'none';
-                contenedor.innerHTML = `<p style="color:red;">Error de conexión. Detalles: ${error.message}</p>`;
-            }
-        }
+    <!-- Modal de Estado / Alertas -->
+    <div id="statusModal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div id="modalLoading" class="modal-status-section">
+          <div class="spinner"></div>
+          <p>Procesando solicitud...</p>
+        </div>
 
-        // Función para pintar el HTML
-        function renderizarFacturas(facturas) {
-            const contenedor = document.getElementById('contenedor-facturas');
+        <div id="modalSuccess" class="modal-status-section hidden">
+          <div class="success-checkmark">
+            <div class="check-icon"></div>
+          </div>
+          <h3>¡Éxito!</h3>
+          <p id="modalSuccessMessage">La operación se completó correctamente.</p>
+        </div>
 
-            if (!facturas || facturas.length === 0) {
-                contenedor.innerHTML = '<p>No hay facturas pendientes en este momento.</p>';
-                return;
-            }
+        <div id="modalError" class="modal-status-section hidden">
+          <div class="error-icon">❌</div>
+          <h3>Ocurrió un error</h3>
+          <p id="modalErrorMessage">No se pudo completar la acción.</p>
+          <button
+            type="button"
+            onclick="cerrarModalError()"
+            class="btn-cerrar-modal"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
 
-            facturas.forEach(f => {
-                const div = document.createElement('div');
-                div.className = 'factura-card';
-
-                let htmlProductos = '<div class="productos-lista"><strong>Productos:</strong><ul>';
-                if (f.detalles_factura_temporal && f.detalles_factura_temporal.length > 0) {
-                    f.detalles_factura_temporal.forEach(p => {
-                        htmlProductos += `<li>${p.cantidad}x ${p.nombre_producto} - $${p.precio_total}</li>`;
-                    });
-                } else {
-                    htmlProductos += '<li>Sin detalles de productos</li>';
-                }
-                htmlProductos += '</ul></div>';
-
-                div.innerHTML = `
-                    <h3 style="margin-top:0;">ID: ${f.id_factura}</h3>
-                    <p><strong>Cliente:</strong> ${f.nombre} ${f.apellido || ''} (C.I: ${f.cedula || 'N/A'})</p>
-                    <p><strong>Total USD:</strong> $${f.total_usd} | <strong>Total BS:</strong> Bs ${f.total_bs}</p>
-                    <p>
-                        <strong>Banco:</strong> <span id="banco-${f.id_factura}">${f.banco || 'N/A'}</span> | 
-                        <strong>Referencia:</strong> <span id="ref-${f.id_factura}">${f.referencia || 'N/A'}</span>
-                    </p>
-                    
-                    ${htmlProductos}
-                    
-                    <hr>
-                    <button class="btn" onclick="editarDatosPago('${f.id_factura}')">✏️ Editar/Añadir Pago</button>
-                `;
-                
-                contenedor.appendChild(div);
-            });
-        }
-
-        // Función PATCH para probar la edición de una factura
-        async function editarDatosPago(idFactura) {
-            const nuevoBanco = prompt(`Introduce el Banco para la factura ${idFactura}:`);
-            if (nuevoBanco === null) return; 
-
-            const nuevaRef = prompt(`Introduce la Referencia para la factura ${idFactura}:`);
-            if (nuevaRef === null) return;
-
-            try {
-                // Ruta relativa directa a la función serverless de Vercel
-                const response = await fetch('/api/gestion-temporales', {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id_factura: idFactura,
-                        banco: nuevoBanco,
-                        referencia: nuevaRef
-                    })
-                });
-
-                const json = await response.json();
-                
-                if (json.status === "success") {
-                    alert("¡Actualizado con éxito en la base de datos!");
-                    cargarFacturas(); 
-                } else {
-                    alert("Error al actualizar: " + json.message);
-                }
-            } catch (error) {
-                alert("Error de red: " + error.message);
-            }
-        }
-
-        // Ejecutar carga inicial
-        window.onload = cargarFacturas;
-    </script>
-
-</body>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../js/utils.js"></script>
+    <script src="../../js/verificacion.js"></script>
+  </body>
 </html>
