@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba en Vercel - Facturas Temporales</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background-color: #f9f9f9; }
+        .factura-card { 
+            background: white; 
+            border: 1px solid #ccc; 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 5px;
+        }
+        .productos-lista { margin-top: 10px; border-left: 3px solid #007bff; padding-left: 10px; }
+        .btn { padding: 8px 12px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px; }
+        .btn:hover { background: #0056b3; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
+    </style>
+</head>
+<body>
+
+    <h1>📋 Facturas Temporales Pendientes</h1>
+    <button class="btn" onclick="cargarFacturas()">🔄 Recargar Facturas</button>
+    <br><br>
+
+    <div id="cargando">Cargando facturas desde Vercel...</div>
+    <div id="contenedor-facturas"></div>
+
+    <script>
+        // Usamos rutas relativas. Vercel automáticamente lo resolverá a tu dominio 
+        // (ej. https://tu-proyecto.vercel.app/api/consultar-temporales)
+
+        // Función GET para obtener las facturas temporales
+        async function cargarFacturas() {
+            const contenedor = document.getElementById('contenedor-facturas');
+            const cargando = document.getElementById('cargando');
+            
+            contenedor.innerHTML = '';
+            cargando.style.display = 'block';
+
+            try {
+                // Ruta relativa directa a la función serverless de Vercel
+                const response = await fetch('/api/consultar-temporales');
+                const json = await response.json();
+
+                cargando.style.display = 'none';
+
+                if (json.status === "success") {
+                    renderizarFacturas(json.data);
+                } else {
+                    contenedor.innerHTML = `<p style="color:red;">Error del servidor: ${json.message}</p>`;
+                }
+            } catch (error) {
+                cargando.style.display = 'none';
+                contenedor.innerHTML = `<p style="color:red;">Error de conexión. Detalles: ${error.message}</p>`;
+            }
+        }
+
+        // Función para pintar el HTML
+        function renderizarFacturas(facturas) {
+            const contenedor = document.getElementById('contenedor-facturas');
+
+            if (!facturas || facturas.length === 0) {
+                contenedor.innerHTML = '<p>No hay facturas pendientes en este momento.</p>';
+                return;
+            }
+
+            facturas.forEach(f => {
+                const div = document.createElement('div');
+                div.className = 'factura-card';
+
+                let htmlProductos = '<div class="productos-lista"><strong>Productos:</strong><ul>';
+                if (f.detalles_factura_temporal && f.detalles_factura_temporal.length > 0) {
+                    f.detalles_factura_temporal.forEach(p => {
+                        htmlProductos += `<li>${p.cantidad}x ${p.nombre_producto} - $${p.precio_total}</li>`;
+                    });
+                } else {
+                    htmlProductos += '<li>Sin detalles de productos</li>';
+                }
+                htmlProductos += '</ul></div>';
+
+                div.innerHTML = `
+                    <h3 style="margin-top:0;">ID: ${f.id_factura}</h3>
+                    <p><strong>Cliente:</strong> ${f.nombre} ${f.apellido || ''} (C.I: ${f.cedula || 'N/A'})</p>
+                    <p><strong>Total USD:</strong> $${f.total_usd} | <strong>Total BS:</strong> Bs ${f.total_bs}</p>
+                    <p>
+                        <strong>Banco:</strong> <span id="banco-${f.id_factura}">${f.banco || 'N/A'}</span> | 
+                        <strong>Referencia:</strong> <span id="ref-${f.id_factura}">${f.referencia || 'N/A'}</span>
+                    </p>
+                    
+                    ${htmlProductos}
+                    
+                    <hr>
+                    <button class="btn" onclick="editarDatosPago('${f.id_factura}')">✏️ Editar/Añadir Pago</button>
+                `;
+                
+                contenedor.appendChild(div);
+            });
+        }
+
+        // Función PATCH para probar la edición de una factura
+        async function editarDatosPago(idFactura) {
+            const nuevoBanco = prompt(`Introduce el Banco para la factura ${idFactura}:`);
+            if (nuevoBanco === null) return; 
+
+            const nuevaRef = prompt(`Introduce la Referencia para la factura ${idFactura}:`);
+            if (nuevaRef === null) return;
+
+            try {
+                // Ruta relativa directa a la función serverless de Vercel
+                const response = await fetch('/api/gestion-temporales', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id_factura: idFactura,
+                        banco: nuevoBanco,
+                        referencia: nuevaRef
+                    })
+                });
+
+                const json = await response.json();
+                
+                if (json.status === "success") {
+                    alert("¡Actualizado con éxito en la base de datos!");
+                    cargarFacturas(); 
+                } else {
+                    alert("Error al actualizar: " + json.message);
+                }
+            } catch (error) {
+                alert("Error de red: " + error.message);
+            }
+        }
+
+        // Ejecutar carga inicial
+        window.onload = cargarFacturas;
+    </script>
+
+</body>
+</html>
