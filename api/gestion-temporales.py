@@ -40,20 +40,30 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode('utf-8'))
 
     def do_GET(self):
-        """Consulta las facturas temporales pendientes."""
+        """
+        Al hacer una petición GET a este archivo en Vercel, 
+        automáticamente consultará las facturas temporales.
+        """
         self._consultar_temporales()
 
     def do_PATCH(self):
-        """Edita la factura temporal."""
+        """
+        Al hacer una petición PATCH a este archivo en Vercel, 
+        automáticamente editará la factura temporal.
+        """
         self._editar_temporal()
         
     def do_POST(self):
-        """Alternativa POST para editar."""
+        """
+        Opcional: Por si tu frontend tiene problemas enviando PATCH, 
+        puedes usar POST como alternativa para editar.
+        """
         self._editar_temporal()
 
     # --- LÓGICA DE LAS ACCIONES ---
 
     def _consultar_temporales(self):
+        """Consulta en Supabase las facturas en estado 'pendiente'."""
         url_supabase_get = f"{URL_SUPABASE}/rest/v1/facturas_temporales?estado=eq.pendiente&select=*,detalles_factura_temporal(*)"
         headers_supabase = {
             "apikey": KEY_SUPABASE,
@@ -87,7 +97,70 @@ class handler(BaseHTTPRequestHandler):
             self._responder(400, {"status": "error", "message": "Se requiere el 'id_factura' para editar"})
             return
 
-        # Eliminamos el id_factura del cuerpo para no alterar la llave primaria
+        nuevo_estado = body_data.get("estado")
+
+        # CASO ESPECIAL: Si se está aprobando, migramos a las tablas definitivas
+        if nuevo_estado == "aprobado":
+            headers_supabase = {
+                "apikey": KEY_SUPABASE,
+                "Authorization": f"Bearer {KEY_SUPABASE}",
+                "Content-Type": "application/json",
+            }
+
+            try:
+                # 1. Consultar la factura temporal completa con sus detalles
+                url_get_temp = f"{URL_SUPABASE}/rest/v1/facturas_temporales?id_factura=eq.{id_factura}&select=*,detalles_factura_temporal(*)"
+                res_temp = session.get(url_get_temp, headers=headers_supabase, timeout=10)
+                
+                if res_temp.status_code != 200 or not res_temp.json():
+                    self._responder(404, {"status": "error", "message": "No se encontró la factura temporal a aprobar"})
+                    return
+
+                factura_temp = res_temp.json()[0]
+                detalles = factura_temp.pop("detalles_factura_temporal", [])
+
+                # Cambiamos el estado a aprobado para la tabla definitiva
+                factura_temp["estado"] = "aprobado"
+
+                # 2. Insertar en la tabla definitiva 'facturas'
+                url_insert_factura = f"{URL_SUPABASE}/rest/v1/facturas"
+                res_ins_fac = session.post(url_insert_factura, json=factura_temp, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
+                
+                if res_ins_fac.status_code not in (200, 201, 204):
+                    self._responder(502, {"status": "error", "message": f"Error al migrar a la tabla facturas: {res_ins_fac.text}"})
+                    return
+
+                # 3. Insertar los detalles en la tabla definitiva 'factura_detalles' (si existen)
+                if detalles:
+                    # Opcional: Limpiamos campos internos o de relación si Supabase los genera automáticamente
+                    for det in detalles:
+                        det.pop("id", None) # Eliminar ID autoincremental temporal si lo hubiera
+                        
+                    url_insert_detalles = f"{URL_SUPABASE}/rest/v1/factura_detalles"
+                    res_ins_det = session.post(url_insert_detalles, json=detalles, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
+                    
+                    if res_ins_det.status_code not in (200, 201, 204):
+                        self._responder(502, {"status": "error", "message": f"Error al migrar los detalles: {res_ins_det.text}"})
+                        return
+
+                # 4. Eliminar el registro de las tablas temporales (la cascada de Supabase suele borrar los detalles temporales, o los borramos explícitamente)
+                url_del_detalles = f"{URL_SUPABASE}/rest/v1/detalles_factura_temporal?id_factura=eq.{id_factura}"
+                session.delete(url_del_detalles, headers=headers_supabase, timeout=10)
+
+                url_del_factura = f"{URL_SUPABASE}/rest/v1/facturas_temporales?id_factura=eq.{id_factura}"
+                session.delete(url_del_factura, headers=headers_supabase, timeout=10)
+
+                self._responder(200, {
+                    "status": "success",
+                    "message": "Factura aprobada y migrada exitosamente a tablas definitivas"
+                })
+                return
+
+            except Exception as e:
+                self._responder(500, {"status": "error", "message": f"Error interno durante la migración: {str(e)}"})
+                return
+
+        # FLUJO NORMAL PARA OTROS CAMPOS (si no es aprobación directa)
         if "id_factura" in body_data:
             del body_data["id_factura"]
 
@@ -96,7 +169,6 @@ class handler(BaseHTTPRequestHandler):
             return
 
         url_supabase_patch = f"{URL_SUPABASE}/rest/v1/facturas_temporales?id_factura=eq.{id_factura}"
-        
         headers_supabase = {
             "apikey": KEY_SUPABASE,
             "Authorization": f"Bearer {KEY_SUPABASE}",
@@ -105,22 +177,9 @@ class handler(BaseHTTPRequestHandler):
         }
 
         try:
-            res = session.patch(
-                url_supabase_patch,
-                json=body_data,
-                headers=headers_supabase,
-                timeout=10
-            )
-            
+            res = session.patch(url_supabase_patch, json=body_data, headers=headers_supabase, timeout=10)
             if res.status_code in (200, 204):
-                # Validamos de manera segura si hay contenido antes de parsear JSON
-                response_data = None
-                if res.status_code == 200 and res.text:
-                    try:
-                        response_data = res.json()
-                    except json.JSONDecodeError:
-                        response_data = None
-
+                response_data = res.json() if (res.status_code == 200 and res.text) else None
                 self._responder(200, {
                     "status": "success", 
                     "message": "Factura temporal actualizada correctamente",
@@ -128,6 +187,5 @@ class handler(BaseHTTPRequestHandler):
                 })
             else:
                 self._responder(502, {"status": "error", "message": f"Error al actualizar: {res.text}"})
-                
         except Exception as e:
             self._responder(500, {"status": "error", "message": f"Error interno: {str(e)}"})
