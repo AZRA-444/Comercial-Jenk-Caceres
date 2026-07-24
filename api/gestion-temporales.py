@@ -40,30 +40,20 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode('utf-8'))
 
     def do_GET(self):
-        """
-        Al hacer una petición GET a este archivo en Vercel, 
-        automáticamente consultará las facturas temporales.
-        """
+        """Consulta las facturas temporales pendientes."""
         self._consultar_temporales()
 
     def do_PATCH(self):
-        """
-        Al hacer una petición PATCH a este archivo en Vercel, 
-        automáticamente editará la factura temporal.
-        """
+        """Edita la factura temporal."""
         self._editar_temporal()
         
     def do_POST(self):
-        """
-        Opcional: Por si tu frontend tiene problemas enviando PATCH, 
-        puedes usar POST como alternativa para editar.
-        """
+        """Alternativa POST para editar."""
         self._editar_temporal()
 
     # --- LÓGICA DE LAS ACCIONES ---
 
     def _consultar_temporales(self):
-        """Consulta en Supabase las facturas en estado 'pendiente'."""
         url_supabase_get = f"{URL_SUPABASE}/rest/v1/facturas_temporales?estado=eq.pendiente&select=*,detalles_factura_temporal(*)"
         headers_supabase = {
             "apikey": KEY_SUPABASE,
@@ -80,7 +70,6 @@ class handler(BaseHTTPRequestHandler):
             self._responder(500, {"status": "error", "message": f"Error interno: {str(e)}"})
 
     def _editar_temporal(self):
-        """Recibe un JSON con el id_factura y los campos a actualizar."""
         try:
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length <= 0 or content_length > MAX_BYTES_SOLICITUD:
@@ -98,21 +87,21 @@ class handler(BaseHTTPRequestHandler):
             self._responder(400, {"status": "error", "message": "Se requiere el 'id_factura' para editar"})
             return
 
-        # Eliminamos el id_factura del cuerpo (no queremos actualizar la llave primaria)
-        del body_data["id_factura"]
+        # Eliminamos el id_factura del cuerpo para no alterar la llave primaria
+        if "id_factura" in body_data:
+            del body_data["id_factura"]
 
         if not body_data:
             self._responder(400, {"status": "error", "message": "No se enviaron campos para actualizar"})
             return
 
-        # URL de Supabase para actualizar un registro específico mediante PATCH
         url_supabase_patch = f"{URL_SUPABASE}/rest/v1/facturas_temporales?id_factura=eq.{id_factura}"
         
         headers_supabase = {
             "apikey": KEY_SUPABASE,
             "Authorization": f"Bearer {KEY_SUPABASE}",
             "Content-Type": "application/json",
-            "Prefer": "return=representation"  # Devuelve el objeto actualizado
+            "Prefer": "return=representation"
         }
 
         try:
@@ -124,10 +113,18 @@ class handler(BaseHTTPRequestHandler):
             )
             
             if res.status_code in (200, 204):
+                # Validamos de manera segura si hay contenido antes de parsear JSON
+                response_data = None
+                if res.status_code == 200 and res.text:
+                    try:
+                        response_data = res.json()
+                    except json.JSONDecodeError:
+                        response_data = None
+
                 self._responder(200, {
                     "status": "success", 
                     "message": "Factura temporal actualizada correctamente",
-                    "data": res.json() if res.status_code == 200 else None
+                    "data": response_data
                 })
             else:
                 self._responder(502, {"status": "error", "message": f"Error al actualizar: {res.text}"})
