@@ -42,7 +42,7 @@
 
             try {
                 // Ruta relativa directa a la función serverless de Vercel
-                const response = await fetch('/api/consultar-temporales');
+                const response = await fetch('/api/gestion-temporales');
                 const json = await response.json();
 
                 cargando.style.display = 'none';
