@@ -43,6 +43,6 @@
 
 function cerrarSesion() {
   window.__authClient?.auth.signOut().finally(() => {
-    window.location.href = "login.html";
+    window.location.href = "../../index.html";
   });
 }
