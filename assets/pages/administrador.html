@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/main.css" />
+    <title>Panel de Administración</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="brand">
+        <h2>Panel de Administración</h2>
+      </div>
+      <div class="clock" id="clock"></div>
+      <div class="brand">
+        <button class="btn-secondary" style="padding:10px; margin-right:8px; cursor:pointer;" onclick="cerrarSesion()">
+          <i class="fas fa-right-from-bracket"></i> Salir
+        </button>
+        <a href="../../index.html" class="btn-secondary" style="padding:10px">
+          <i class="fas fa-arrow-left"></i>Volver
+        </a>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="ledger-tabs">
+        <button class="active" data-panel="ventas">Ventas del mes</button>
+        <button data-panel="comisiones">Comisiones</button>
+      </div>
+
+      <!-- ===================== PANEL VENTAS ===================== -->
+      <div class="panel active" id="panel-ventas">
+        <div class="filters">
+          <div class="field">
+            <label for="f-mes">Mes</label>
+            <input type="month" id="f-mes" />
+          </div>
+          <div class="field">
+            <label for="f-dia">Día específico</label>
+            <input type="date" id="f-dia" />
+          </div>
+          <div class="field">
+            <label for="f-cedula">Cédula</label>
+            <input type="text" id="f-cedula" placeholder="V-12345678" minlength="9" maxlength="10" oninput="formatDoc(this)"/>
+          </div>
+          <div class="field">
+            <label for="f-vendedor">Vendedor</label>
+            <input type="text" id="f-vendedor" placeholder="Nombre" />
+          </div>
+          <div class="field">
+            <label for="f-id">ID Factura</label>
+            <input type="text" id="f-id" placeholder="FAC-..." />
+          </div>
+          <div class="field">
+            <label for="f-metodo">Método de pago</label>
+            <select id="f-metodo">
+              <option value="">Todos</option>
+              <option value="PM">Pago Movil</option>
+              <option value="PVD">Punto Debito</option>
+              <option value="PVC">Punto Credio</option>
+              <option value="ED">Efectivo Divisa</option>
+              <option value="EBS">Efectivo Bolivares</option>
+              <option value="OTROS">Otros</option>
+            </select>
+          </div>
+          <button class="btn" id="btn-buscar">Buscar</button>
+          <button class="btn ghost" id="btn-limpiar">Limpiar</button>
+        </div>
+
+        <div class="status-msg" id="status-ventas">Cargando…</div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <div class="label">Ventas totales USD</div>
+            <div class="value" id="kpi-usd">$0.00</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Ventas totales Bs</div>
+            <div class="value" id="kpi-bs">0,00</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Facturas emitidas</div>
+            <div class="value" id="kpi-count">0</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Ticket promedio USD</div>
+            <div class="value" id="kpi-avg">$0.00</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Descuentos otorgados</div>
+            <div class="value" id="kpi-desc">$0.00</div>
+          </div>
+        </div>
+
+        <div class="charts">
+          <div class="chart-card">
+            <h3>Ventas por día (USD)</h3>
+            <canvas id="chart-dias"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Ventas por vendedor</h3>
+            <canvas id="chart-vendedores"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Métodos de pago</h3>
+            <canvas id="chart-metodos"></canvas>
+          </div>
+        </div>
+
+        <h2 class="section-title">
+          Detalle de facturas <small id="ventas-count-label"></small>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Cédula</th>
+                <th>Vendedor</th>
+                <th>Método</th>
+                <th class="num">Subtotal $</th>
+                <th class="num">Desc. $</th>
+                <th class="num">Total $</th>
+                <th class="num">Total Bs</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-ventas"></tbody>
+          </table>
+          <div class="empty-state" id="empty-ventas" style="display: none">
+            No se encontraron facturas con esos filtros.
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== PANEL COMISIONES ===================== -->
+      <div class="panel" id="panel-comisiones">
+        <div class="filters">
+          <div class="field">
+            <label for="c-mes">Mes</label>
+            <input type="month" id="c-mes" />
+          </div>
+          <button class="btn" id="btn-buscar-com">Calcular</button>
+        </div>
+
+        <div class="status-msg" id="status-comisiones"></div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <div class="label">Comisiones del mes (1%)</div>
+            <div class="value" id="kpi-com-total">$0.00</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Vendedores activos</div>
+            <div class="value" id="kpi-com-vend">0</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Pendiente de pago</div>
+            <div class="value" id="kpi-com-pend">$0.00</div>
+          </div>
+        </div>
+
+        <h2 class="section-title">
+          Comisiones por vendedor
+          <small>1% sobre el total de cada venta (USD)</small>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Vendedor</th>
+                <th class="num"># Ventas</th>
+                <th class="num">Total vendido $</th>
+                <th class="num">Comisión $ (1%)</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-comisiones"></tbody>
+          </table>
+          <div class="empty-state" id="empty-comisiones" style="display: none">
+            No hay ventas registradas en ese mes.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal detalle factura -->
+    <div class="modal-overlay" id="modal-detalle">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="modal-detalle-title">Factura</h3>
+          <button id="modal-detalle-close" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="modal-detalle-body"></div>
+      </div>
+    </div>
+
+    <!-- Modal editar descuento -->
+    <div class="modal-overlay" id="modal-descuento">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>Ajustar descuento</h3>
+          <button id="modal-descuento-close" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field" style="margin-bottom: 10px">
+            <label>Subtotal USD</label>
+            <input type="text" id="desc-subtotal" disabled />
+          </div>
+          <div class="field">
+            <label for="desc-nuevo">Nuevo descuento USD</label>
+            <input type="number" id="desc-nuevo" min="0" step="0.01" />
+          </div>
+          <div class="field" style="margin-top: 10px">
+            <label for="desc-nuevo-bs">Nuevo descuento Bs (opcional)</label>
+            <input type="number" id="desc-nuevo-bs" min="0" step="0.01" />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn ghost" id="desc-cancelar">Cancelar</button>
+          <button class="btn" id="desc-guardar">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../js/supabase-config.js"></script>
+    <script src="../../js/utils.js"></script>
+    <script src="../../js/auth-guard.js"></script>
+    <script src="../../js/admin-panel.js"></script>
+
+  </body>
+</html>

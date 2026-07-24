@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/main.css" />
+    <title>Panel de Administración</title>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="brand">
+        <h2>Panel de Administración</h2>
+      </div>
+      <div class="clock" id="clock"></div>
+      <div class="brand">
+        <button class="btn-secondary" style="padding:10px; margin-right:8px; cursor:pointer;" onclick="cerrarSesion()">
+          <i class="fas fa-right-from-bracket"></i> Salir
+        </button>
+        <a href="../../index.html" class="btn-secondary" style="padding:10px">
+          <i class="fas fa-arrow-left"></i>Volver
+        </a>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <!-- ===================== PANEL FACTURAS DE HOY ===================== -->
+      <div class="panel active" id="panel-recientes">
+        <div class="status-msg" id="status-recientes">Cargando…</div>
+
+        <h2 class="section-title">
+          Facturas del día <small id="recientes-count-label"></small>
+          <button
+            class="btn ghost small"
+            id="btn-refrescar-recientes"
+            style="float: right"
+          >
+            <i class="fas fa-rotate"></i> Actualizar
+          </button>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Hora</th>
+                <th>Cliente</th>
+                <th>Cédula</th>
+                <th>Vendedor</th>
+                <th>Método</th>
+                <th class="num">Total $</th>
+                <th class="num">Total Bs</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-recientes"></tbody>
+          </table>
+          <div class="empty-state" id="empty-recientes" style="display: none">
+            Aún no se han registrado facturas hoy.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal detalle factura -->
+    <div class="modal-overlay" id="modal-detalle">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="modal-detalle-title">Factura</h3>
+          <button id="modal-detalle-close" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="modal-detalle-body"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../js/supabase-config.js"></script>
+    <script src="../../js/utils.js"></script>
+    <script src="../../js/auth-guard.js"></script>
+    <script src="../../js/facturasRecientes.js"></script>
+
+  </body>
+</html>

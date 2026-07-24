@@ -1,0 +1,14 @@
+{
+  "cleanUrls": true,
+
+  "rewrites": [
+    {
+      "source": "/factura/:id",
+      "destination": "/factura.html?id=:id"
+    },
+    {
+      "source": "/home",
+      "destination": "/index.html"
+    }
+  ]
+}

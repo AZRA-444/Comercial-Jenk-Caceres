@@ -1,0 +1,400 @@
+/* ============================================================
+   FACTURA.CSS
+   Estilo "documento fiscal" — hoja de papel, formal, imprimible.
+   Independiente del tema oscuro del resto del sitio a propósito
+   (una factura debe verse como una factura, no como la app).
+   Mobile-first: la base es la vista compacta de celular.
+   ============================================================ */
+
+:root {
+  --factura-border: #d1d5db;
+  --factura-border-strong: #111827;
+  --factura-text: #1f2937;
+  --factura-text-muted: #6b7280;
+  --factura-bg-page: #e5e7eb;
+  --factura-bg-paper: #ffffff;
+  --factura-accent: #0f172a;
+  --factura-stripe: #f9fafb;
+  --factura-radius: 4px;
+  --factura-max-width: 780px;
+  --ease: cubic-bezier(.25, 1, .5, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: 'Poppins', 'Segoe UI', Arial, sans-serif;
+  background: var(--factura-bg-page);
+  color: var(--factura-text);
+  padding: clamp(12px, 4vw, 40px) clamp(10px, 3vw, 16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- Loading state ---------- */
+#loading {
+  color: var(--factura-text-muted) !important;
+}
+
+#loading i {
+  color: var(--factura-accent) !important;
+}
+
+/* ---------- Botón de imprimir (no sale en la hoja impresa) ---------- */
+.factura-actions {
+  max-width: var(--factura-max-width);
+  margin: 0 auto 14px;
+  text-align: right;
+  animation: fadeIn .4s var(--ease) both;
+}
+
+.btn-imprimir {
+  background: var(--factura-accent);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--factura-radius);
+  font-family: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+  transition: background .2s ease, transform .2s ease;
+}
+
+.btn-imprimir:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+
+.btn-imprimir:active {
+  transform: scale(.98);
+}
+
+/* ---------- Hoja de factura ---------- */
+.factura {
+  max-width: var(--factura-max-width);
+  margin: 0 auto;
+  background: var(--factura-bg-paper);
+  border: 1px solid var(--factura-border);
+  border-radius: var(--factura-radius);
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.12);
+  padding: 22px 18px 24px;
+  position: relative;
+  animation: fadeInUp .5s var(--ease) both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Franja superior tipo sello fiscal */
+.factura::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--factura-accent),
+    var(--factura-accent) 10px,
+    #334155 10px,
+    #334155 20px
+  );
+  border-radius: var(--factura-radius) var(--factura-radius) 0 0;
+}
+
+/* ---------- Cabecera ---------- */
+.factura .header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-bottom: 2px solid var(--factura-border-strong);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.factura .header h1 {
+  font-size: clamp(1.15rem, 1rem + 1vw, 1.6rem);
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: var(--factura-accent);
+  margin: 0 0 4px;
+}
+
+.factura .header .empresa {
+  font-size: .78rem;
+  color: var(--factura-text-muted);
+  line-height: 1.5;
+}
+
+.factura .logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+.factura .header .empresa strong {
+  display: block;
+  font-size: .92rem;
+  color: var(--factura-text);
+}
+
+.factura .header .folio {
+  font-size: .82rem;
+  color: var(--factura-text-muted);
+}
+
+.factura .header .folio p#id_factura {
+  font-family: 'Courier New', monospace;
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--factura-text);
+  background: var(--factura-stripe);
+  border: 1px solid var(--factura-border);
+  border-radius: var(--factura-radius);
+  padding: 6px 12px;
+  margin: 0 0 6px;
+  display: inline-block;
+}
+
+/* ---------- Datos del cliente ---------- */
+.factura .info {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  background: var(--factura-stripe);
+  border: 1px solid var(--factura-border);
+  border-radius: var(--factura-radius);
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  font-size: .85rem;
+}
+
+.factura .info div strong {
+  color: var(--factura-text-muted);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ---------- Tabla de productos ---------- */
+.factura-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 20px;
+  border-radius: var(--factura-radius);
+}
+
+#tabla_productos {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+
+#tabla_productos thead th {
+  background: var(--factura-accent);
+  color: #f8fafc;
+  text-align: left;
+  font-weight: 600;
+  padding: 9px 10px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+#tabla_productos thead th:nth-child(2),
+#tabla_productos thead th:nth-child(3),
+#tabla_productos thead th:nth-child(4) {
+  text-align: right;
+}
+
+#tabla_productos tbody td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--factura-border);
+  color: var(--factura-text);
+}
+
+#tabla_productos tbody td:nth-child(2),
+#tabla_productos tbody td:nth-child(3),
+#tabla_productos tbody td:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#tabla_productos tbody tr:nth-child(even) {
+  background: var(--factura-stripe);
+}
+
+#tabla_productos tbody tr:last-child td {
+  border-bottom: 2px solid var(--factura-border-strong);
+}
+
+/* ---------- Totales ---------- */
+.factura .total {
+  margin-left: auto;
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid var(--factura-border);
+  border-radius: var(--factura-radius);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.factura .total div {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: .85rem;
+  border-bottom: 1px solid var(--factura-border);
+  gap: 12px;
+}
+
+.factura .total div:last-child {
+  border-bottom: none;
+}
+
+.factura .total div strong {
+  font-size: .98rem;
+}
+
+.factura .total div:has(strong) {
+  background: var(--factura-accent);
+  color: #f8fafc;
+  padding: 11px 14px;
+}
+
+/* ---------- Método de pago / footer ---------- */
+.factura .payment-info {
+  text-align: center;
+  border-top: 1px dashed var(--factura-border);
+  padding-top: 18px;
+  margin-top: 6px;
+  color: var(--factura-text-muted);
+  font-size: .82rem;
+}
+
+.factura .payment-info p strong {
+  color: var(--factura-text);
+}
+
+.factura .legal-note {
+  margin-top: 20px;
+  text-align: center;
+  font-size: .68rem;
+  color: var(--factura-text-muted);
+  border-top: 1px solid var(--factura-border);
+  padding-top: 12px;
+}
+
+/* ---------- Error state ---------- */
+.factura-error {
+  max-width: 480px;
+  margin: 60px auto;
+  text-align: center;
+  background: var(--factura-bg-paper);
+  border: 1px solid var(--factura-border);
+  border-radius: var(--factura-radius);
+  padding: 28px 20px;
+  color: var(--factura-text-muted);
+  animation: fadeInUp .4s var(--ease) both;
+}
+
+.factura-error i {
+  font-size: 1.8rem;
+  color: #ef4444;
+  margin-bottom: 10px;
+}
+
+/* ---------- Tablet (≥600px) ---------- */
+@media (min-width: 600px) {
+  .factura {
+    padding: 32px 36px 28px;
+  }
+
+  .factura .header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .factura .header .folio {
+    text-align: right;
+  }
+
+  .factura .info {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 28px;
+    padding: 16px 20px;
+  }
+
+  #tabla_productos {
+    font-size: .86rem;
+  }
+
+  .factura-actions,
+  .btn-imprimir {
+    width: auto;
+  }
+}
+
+/* ---------- Laptop / Desktop (≥900px) ---------- */
+@media (min-width: 900px) {
+  :root {
+    --factura-max-width: 820px;
+  }
+
+  .factura {
+    padding: 40px 44px 32px;
+  }
+
+  #tabla_productos {
+    min-width: 0;
+  }
+
+  .factura-table-wrap {
+    overflow-x: visible;
+  }
+}
+
+/* ---------- Impresión ---------- */
+@media print {
+  body {
+    background: #fff;
+    padding: 0;
+  }
+
+  .factura-actions {
+    display: none;
+  }
+
+  .factura {
+    box-shadow: none;
+    border: none;
+    max-width: 100%;
+    padding: 0;
+    animation: none;
+  }
+}

@@ -1,0 +1,127 @@
+/* ============================================================
+   GLOBAL.CSS
+   Fuente única de verdad para variables, reset y base.
+   Mobile-first: todo lo de aquí es la base para pantallas
+   pequeñas; los demás archivos escalan hacia arriba con
+   min-width.
+   ============================================================ */
+
+:root {
+  --bg-primary: #0b0f17;
+  --bg-secondary: #1e1e2f;
+
+  --glass-bg: rgba(255, 255, 255, .04);
+  --glass-border: rgba(255, 255, 255, .08);
+
+  --text: #f3f4f6;
+  --text-secondary: #9ca3af;
+
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, .12);
+  --danger: #ef4444;
+  --danger-hover: #cc0000;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+
+  --shadow: 0 8px 32px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, .45);
+
+  /* Contenedor: crece con la pantalla en vez de saltar de golpe */
+  --content-width: min(100%, 900px);
+
+  /* Tipografía fluida: se ajusta sola entre mobile y desktop */
+  --fs-h1: clamp(1.4rem, 1.1rem + 1.3vw, 2rem);
+  --fs-h2: clamp(.85rem, .8rem + .2vw, .95rem);
+  --fs-body: clamp(.9rem, .87rem + .12vw, 1rem);
+
+  --ease: cubic-bezier(.25, 1, .5, 1);
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  font-size: var(--fs-body);
+  min-height: 100dvh;
+  background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+  color: var(--text);
+  line-height: 1.5;
+
+  /* Padding fluido: respira más en tablet/desktop sin medias queries extra */
+  padding: clamp(16px, 3vw, 40px);
+  overflow-x: hidden;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+/* Accesibilidad: foco visible consistente en toda la app */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Respeta a quienes prefieren menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   UTILIDADES DE ANIMACIÓN REUTILIZABLES
+========================================================================== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp .5s var(--ease) both;
+}
+
+/* Aplica un pequeño relevo (stagger) a hijos directos, útil para
+   listas de tarjetas o secciones que quieres que entren en cascada */
+.stagger > * {
+  animation: fadeInUp .5s var(--ease) both;
+}
+
+.stagger > *:nth-child(1) { animation-delay: .03s; }
+.stagger > *:nth-child(2) { animation-delay: .09s; }
+.stagger > *:nth-child(3) { animation-delay: .15s; }
+.stagger > *:nth-child(4) { animation-delay: .21s; }
+.stagger > *:nth-child(5) { animation-delay: .27s; }
