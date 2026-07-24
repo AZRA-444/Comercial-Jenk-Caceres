@@ -2,7 +2,7 @@
 async function cargarFacturasPendientes() {
     mostrarCargando(true);
     try {
-        const response = await fetch('/api/verificar', { // Ajusta la ruta si tu archivo se llama diferente en la carpeta api/
+        const response = await fetch('/api/gestion-temporales', { // Ajusta la ruta si tu archivo se llama diferente en la carpeta api/
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
