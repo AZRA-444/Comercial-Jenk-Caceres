@@ -20,7 +20,7 @@ if (inputVendedor) {
   });
 }
 
-const BACKEND_API_URL = "/api/guardar-factura";
+const BACKEND_API_URL = "/api/precargar-factura";
 
 //--- BLOQUEAR RECARGA ---//
 window.addEventListener("beforeunload", (event) => {
@@ -409,7 +409,7 @@ function actualizarTabla() {
             <h1>Total: </h1>
             <h1>$${state.montoFinalUSD.toFixed(2)} / ${state.montoFinalBS.toFixed(2)}Bs</h1>
             <br>
-            <button class="process" onclick="finalizarCompra()">Procesar Compra <i class="fas fa-receipt"></i> </button>
+            <button class="process" onclick="finalizarCompra()" id="procesarCompra">Procesar Compra <i class="fas fa-receipt"></i> </button>
           </div>
         </div>
     `;
@@ -454,271 +454,7 @@ function calcularPrecioTotal() {
   cantidadInput.addEventListener("input", calcular);
   precioUndInput.addEventListener("input", calcular);
 }
-
-//--- SECCIONES DE PAGO ---//
-function mostrarSeccionPago() {
-  if (!state.clienteCompleto) {
-    alert(
-      "Debes completar los datos del cliente antes de continuar con el pago.",
-    );
-    abrirModalCliente();
-    return;
-  }
-
-  const seccionProducto = document.getElementById("seccionProducto");
-  const seccionFactura = document.getElementById("seccionFactura");
-  const seccionPago = document.getElementById("seccionPago");
-  const inputTasaBCV = document.getElementById("tasa-input");
-
-  if (seccionProducto && seccionFactura && seccionPago) {
-    seccionProducto.style.display = "none";
-    seccionFactura.style.display = "none";
-    if (inputTasaBCV) inputTasaBCV.readOnly = true;
-    seccionPago.style.display = "block";
-
-    const metodoPagoSelect = document.getElementById("metodoPago");
-    if (metodoPagoSelect) selectMetodoPago(metodoPagoSelect.value);
-  }
-}
-
-function ocultarSeccionPagos() {
-  const seccionProducto = document.getElementById("seccionProducto");
-  const seccionFactura = document.getElementById("seccionFactura");
-  const seccionPago = document.getElementById("seccionPago");
-  const inputTasaBCV = document.getElementById("tasa-input");
-
-  if (seccionProducto && seccionFactura && seccionPago) {
-    seccionProducto.style.display = "grid";
-    seccionFactura.style.display = "grid";
-    if (inputTasaBCV) inputTasaBCV.readOnly = false;
-    seccionPago.style.display = "none";
-  }
-}
-
-function selectMetodoPago(valor) {
-  const detailsContainer = document.getElementById("paymentDetails");
-  if (!detailsContainer) return;
-
-  detailsContainer.innerHTML = "";
-  if (state.montoFinalUSD <= 0) return;
-
-  const montoEncabezado = `
-    <div style="grid-column: 1 / -1; margin-bottom: 10px;">
-      <h3 style="color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase;">Monto a transferir:</h3>
-      <h2 style="color: var(--accent); font-size: 1.5rem; font-weight: 600;">$${state.montoFinalUSD.toFixed(2)} / ${state.montoFinalBS.toFixed(2)}Bs</h2>
-    </div>
-  `;
-
-  if (valor === "PM") {
-    detailsContainer.innerHTML = `
-      <div class="form-billing-grid" style="margin-top: 16px;">
-        ${montoEncabezado}
-        <label class="form-field">Banco Destino
-          <select id="bankSelect">
-            <option value="" disabled selected>Seleccione un banco</option>
-            <option value="Banesco">Banesco</option>
-            <option value="Venezuela">Banco de Venezuela</option>
-            <option value="Provincial">Provincial</option>
-            <option value="Banplus">Banplus</option>
-          </select>
-        </label>
-        <label class="form-field">Número de Referencia
-          <input type="number" id="pmRef" placeholder="Últimos 4 dígitos">
-        </label>
-        <div class="form-field capture-container" style="grid-column: 1 / -1;">
-          <span class="capture-label">Comprobante de Pago</span>
-          <input type="file" id="receiptCapture" accept="image/*" capture="environment" style="display: none;" onchange="previewReceipt(this)">
-          <button type="button" class="btn-secondary btn-capture" onclick="document.getElementById('receiptCapture').click()">
-            <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
-          </button>
-          <div id="receiptPreview" class="receipt-preview-box" style="display: none;"></div>
-        </div>
-      </div>
-    `;
-  } else if (valor === "PVD" || valor === "PVC") {
-    detailsContainer.innerHTML = montoEncabezado;
-  } else if (valor === "ED") {
-    detailsContainer.innerHTML = `
-      <div style="grid-column: 1 / -1; margin-bottom: 10px;">
-        <h3 style="color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase;">Monto a pagar:</h3>
-        <h2 style="color: var(--accent); font-size: 1.5rem; font-weight: 600;">$${state.montoFinalUSD.toFixed(2)}</h2>
-      </div>
-      <div class="form-billing-grid" style="margin-top: 16px;">
-        <label class="form-field">Monto Recibido ($)
-          <input type="number" id="EDMontoRecibido" placeholder="ej: 20" step="0.01">
-        </label>
-        <label class="form-field">Vuelto a Entregar ($)
-          <input type="text" id="EDVueltoEntrega" readonly placeholder="0.00">
-        </label>
-        <label class="form-field">Observaciones
-          <textarea id="observacionesED" rows="4" placeholder="Detalla alguna novedad..."></textarea>
-        </label>
-      </div>
-    `;
-    activarCalculoVueltoED();
-  } else if (valor === "EBS") {
-    detailsContainer.innerHTML = `
-      <div style="grid-column: 1 / -1; margin-bottom: 10px;">
-        <h3 style="color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase;">Monto a pagar:</h3>
-        <h2 style="color: var(--accent); font-size: 1.5rem; font-weight: 600;">${state.montoFinalBS.toFixed(2)}Bs</h2>
-      </div>
-      <div class="form-billing-grid" style="margin-top: 16px;">
-        <label class="form-field">Monto Recibido (Bs)
-          <input type="number" id="EBSMontoRecibido" placeholder="ej: 2500" step="0.01">
-        </label>
-        <label class="form-field">Vuelto a Entregar (Bs)
-          <input type="text" id="EBSVueltoEntrega" readonly placeholder="0.00">
-        </label> 
-      </div> `;
-    activarCalculoVueltoEBS();
-  } else if (valor === "OTROS") {
-    detailsContainer.innerHTML = `
-      ${montoEncabezado}
-      <div class="form-billing-grid" style="margin-top: 16px;">
-        <label class="form-field">Observaciones
-          <textarea id="observacionesOTROS" rows="4" placeholder="Detalla alguna novedad..."></textarea>
-        </label>
-        <div class="form-field capture-container" style="grid-column: 1 / -1;">
-          <span class="capture-label">Comprobante de Pago</span>
-          <input type="file" id="receiptCapture" accept="image/*" capture="environment" style="display: none;" onchange="previewReceipt(this)">
-          <button type="button" class="btn-secondary btn-capture" onclick="document.getElementById('receiptCapture').click()">
-            <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
-          </button>
-          <div id="receiptPreview" class="receipt-preview-box" style="display: none;"></div>
-        </div>
-      </div>
-    `;
-  }
-}
-
-function activarCalculoVueltoED() {
-  const montoRecibidoInput = document.getElementById("EDMontoRecibido");
-  const vueltoEntregaInput = document.getElementById("EDVueltoEntrega");
-
-  if (!montoRecibidoInput || !vueltoEntregaInput) return;
-
-  montoRecibidoInput.addEventListener("input", () => {
-    const montoRecibido = Number(montoRecibidoInput.value) || 0;
-    if (montoRecibido < state.montoFinalUSD) {
-      vueltoEntregaInput.value = "0.00";
-      return;
-    }
-    vueltoEntregaInput.value = `$${(montoRecibido - state.montoFinalUSD).toFixed(2)}`;
-  });
-}
-
-function activarCalculoVueltoEBS() {
-  const montoRecibidoInput = document.getElementById("EBSMontoRecibido");
-  const vueltoEntregaInput = document.getElementById("EBSVueltoEntrega");
-
-  if (!montoRecibidoInput || !vueltoEntregaInput) return;
-
-  montoRecibidoInput.addEventListener("input", () => {
-    const montoRecibido = Number(montoRecibidoInput.value) || 0;
-    if (montoRecibido < state.montoFinalBS) {
-      vueltoEntregaInput.value = "0.00";
-      return;
-    }
-    vueltoEntregaInput.value = `${(montoRecibido - state.montoFinalBS).toFixed(2)}Bs`;
-  });
-}
-
-function previewReceipt(input) {
-  const previewBox = document.getElementById("receiptPreview");
-  if (!previewBox) return;
-
-  if (input.files?.[0]) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      previewBox.style.display = "block";
-      previewBox.style.backgroundImage = `url('${e.target.result}')`;
-    };
-    reader.readAsDataURL(input.files[0]);
-  } else {
-    previewBox.style.display = "none";
-    previewBox.style.backgroundImage = "none";
-  }
-}
-
-//--- CONVERTIR ARCHIVO A BASE64 (sin el prefijo "data:image/...;base64,") ---//
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// --- COMPRIMIR/REDIMENSIONAR LA FOTO DEL COMPROBANTE ANTES DE ENVIARLA ---//
-// Las fotos tomadas con la cámara de un celular suelen pesar varios MB. Al
-// convertirlas a base64 (que pesa ~33% más) y sumarle el resto del JSON de
-// la factura, es fácil superar el límite de tamaño de solicitud que
-// aceptan las funciones serverless (por ejemplo, Vercel corta las
-// peticiones que superan ~4.5MB en el plan gratuito, ANTES de que nuestra
-// función en Python llegue siquiera a ejecutarse). Por eso el comprobante
-// podía fallar en silencio justo en los celulares con mejor cámara, aunque
-// en la computadora (probando con imágenes más livianas) funcionara sin
-// problema.
-//
-// Para que el resultado no dependa del dispositivo, la imagen se
-// redimensiona/comprime aquí antes de seguir. Si por alguna razón el
-// navegador no puede procesarla (formato no soportado, etc.), se sigue con
-// el archivo original y es la validación de tamaño la que decide si se
-// puede enviar o no.
-function comprimirImagenComprobante(file, maxAncho = 1600, calidad = 0.75) {
-  return new Promise((resolve, reject) => {
-    if (!file.type.startsWith("image/")) {
-      reject(new Error("El archivo no es una imagen"));
-      return;
-    }
-
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      let { width, height } = img;
-      if (width > maxAncho) {
-        height = Math.round((height * maxAncho) / width);
-        width = maxAncho;
-      }
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("No se pudo preparar el lienzo de compresión"));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error("No se pudo comprimir la imagen"));
-            return;
-          }
-          const nombreComprimido = file.name.replace(/\.\w+$/, "") + ".jpg";
-          resolve(new File([blob], nombreComprimido, { type: "image/jpeg" }));
-        },
-        "image/jpeg",
-        calidad
-      );
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("No se pudo leer la imagen seleccionada"));
-    };
-
-    img.src = url;
-  });
-}
-
+``
 function mostrarModalCargando() {
   document.getElementById("statusModal").classList.remove("hidden");
   document.getElementById("modalLoading").classList.remove("hidden");
@@ -742,7 +478,7 @@ function cerrarModalError() {
 }
 
 async function finalizarCompra() {
-  const boton = document.getElementById("btnFinalizarCompra");
+  const boton = document.getElementById("procesarCompra");
   if (!boton) return;
 
   // Verificación de seguridad: no debería llegarse aquí sin datos del
@@ -754,110 +490,6 @@ async function finalizarCompra() {
     abrirModalCliente();
     return;
   }
-
-  const metodoPagoSelect = document.getElementById("metodoPago");
-  const metodoSeleccionado = metodoPagoSelect?.value;
-
-  // ==========================================
-  // --- 1. VALIDACIONES DEL MÉTODO DE PAGO ---
-  // ==========================================
-
-  if (!metodoSeleccionado) {
-    alert("Por favor, seleccione un método de pago antes de finalizar la compra.");
-    return; // Detiene la ejecución
-  }
-
-  if (metodoSeleccionado === "PM") {
-    const banco = document.getElementById("bankSelect")?.value;
-    const referencia = document.getElementById("pmRef")?.value.trim();
-    const comprobante = document.getElementById("receiptCapture");
-    
-    if (!banco) {
-      alert("Para Pago Móvil, es obligatorio seleccionar un Banco Destino.");
-      return;
-    }
-    if (!referencia || referencia.length < 4) {
-      alert("Para Pago Móvil, debe ingresar un Número de Referencia (al menos los últimos 4 dígitos).");
-      return;
-    }
-    if (!comprobante || !comprobante.files || comprobante.files.length === 0) {
-      alert("Para Pago Móvil, es obligatorio adjuntar o tomar la foto del Comprobante de Pago.");
-      return;
-    }
-  } 
-  else if (metodoSeleccionado === "ED") {
-    const montoRecibido = Number(document.getElementById("EDMontoRecibido")?.value);
-    if (!montoRecibido || montoRecibido < state.montoFinalUSD) {
-      alert(`El monto recibido en efectivo ($) es inválido o menor al total a pagar ($${state.montoFinalUSD.toFixed(2)}).`);
-      return;
-    }
-  } 
-  else if (metodoSeleccionado === "EBS") {
-    const montoRecibido = Number(document.getElementById("EBSMontoRecibido")?.value);
-    if (!montoRecibido || montoRecibido < state.montoFinalBS) {
-      alert(`El monto recibido en efectivo (Bs) es inválido o menor al total a pagar (${state.montoFinalBS.toFixed(2)}Bs).`);
-      return;
-    }
-  }
-  else if (metodoSeleccionado === "OTROS") {
-    const observaciones = document.getElementById("observacionesOTROS")?.value.trim();
-    const comprobante = document.getElementById("receiptCapture");
-
-    if (!observaciones) {
-      alert("Para el método 'OTROS', es obligatorio ingresar las Observaciones detallando la novedad.");
-      return;
-    }
-  
-    if (!comprobante || !comprobante.files || comprobante.files.length === 0) {
-      alert("Para el método 'OTROS', es obligatorio adjuntar o tomar la foto del Comprobante de Pago.");
-      return;
-    }
-  }
-
-  // ==========================================
-  // --- 2. PREPARACIÓN Y ENVÍO DE DATOS ------
-  // ==========================================
-
-  // Convertir el comprobante a base64 (si el usuario adjuntó uno)
-  const comprobanteInputFinal = document.getElementById("receiptCapture");
-  let comprobanteBase64 = null;
-  let comprobanteNombre = null;
-  let comprobanteTipo = null;
-
-  if (comprobanteInputFinal?.files?.[0]) {
-    let file = comprobanteInputFinal.files[0];
-
-    try {
-      file = await comprimirImagenComprobante(file);
-    } catch (err) {
-      // Si no se pudo comprimir (formato raro, navegador viejo, etc.), se
-      // sigue con el archivo tal cual llegó; la validación de tamaño de
-      // abajo decide si de todas formas se puede enviar.
-      console.warn("No se pudo comprimir el comprobante, se usará el original:", err);
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert("La imagen del comprobante no debe superar los 5MB.");
-      return;
-    }
-
-    try {
-      comprobanteBase64 = await fileToBase64(file);
-      comprobanteNombre = file.name;
-      comprobanteTipo = file.type;
-    } catch (err) {
-      alert("No se pudo procesar la imagen del comprobante.");
-      return;
-    }
-  }
-
-  // Las observaciones se piden en el formulario de pago (método ED u OTROS)
-  // pero antes no se incluían en el payload: se perdían silenciosamente y
-  // nunca quedaban guardadas en la factura.
-  const observaciones =
-    document.getElementById("observacionesOTROS")?.value.trim() ||
-    document.getElementById("observacionesED")?.value.trim() ||
-    "";
 
   const facturaData = {
     id_factura: "FAC-" + Date.now().toString().slice(-8),
@@ -874,16 +506,6 @@ async function finalizarCompra() {
     subtotal_bs: state.montoFinalBS + state.descBS,
     descuento_bs: state.descBS,
     total_bs: state.montoFinalBS,
-
-    metodo_pago: metodoSeleccionado || "OTROS",
-    referencia: document.getElementById("pmRef")?.value || "N/A",
-    banco: document.getElementById("bankSelect")?.value || "N/A",
-    observaciones: observaciones || "N/A",
-
-    // Comprobante de pago (imagen)
-    comprobante_base64: comprobanteBase64,
-    comprobante_nombre: comprobanteNombre,
-    comprobante_tipo: comprobanteTipo,
 
     // Productos con estructura exacta que espera el backend
     productos: state.listaProductos.map(p => ({
