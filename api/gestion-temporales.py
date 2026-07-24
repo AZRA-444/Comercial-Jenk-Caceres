@@ -122,22 +122,26 @@ class handler(BaseHTTPRequestHandler):
                 # Cambiamos el estado a aprobado para la tabla definitiva
                 factura_temp["estado"] = "aprobado"
 
-                # Limpiamos campos exclusivos de las tablas temporales que no existan en las definitivas
+                factura_temp = res_temp.json()[0]
+                detalles = factura_temp.pop("detalles_factura_temporal", [])
+
+                # Limpiamos los campos que no existen en la tabla definitiva 'facturas'
                 factura_temp.pop("creado_en", None)
+                factura_temp.pop("estado", None) # <-- Eliminamos el estado para evitar el error de columna inexistente
 
                 # 2. Insertar en la tabla definitiva 'facturas'
                 url_insert_factura = f"{URL_SUPABASE}/rest/v1/facturas"
                 res_ins_fac = session.post(url_insert_factura, json=factura_temp, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
-                
+               
                 if res_ins_fac.status_code not in (200, 201, 204):
                     self._responder(502, {"status": "error", "message": f"Error al migrar a la tabla facturas: {res_ins_fac.text}"})
                     return
 
                 # 3. Insertar los detalles en la tabla definitiva 'factura_detalles' (si existen)
                 if detalles:
+                    # Opcional: Limpiamos campos internos o de relación si Supabase los genera automáticamente
                     for det in detalles:
-                        det.pop("id", None)          # Eliminar ID autoincremental temporal
-                        det.pop("creado_en", None)   # Limpiar campos de auditoría temporal si existen
+                        det.pop("id", None) # Eliminar ID autoincremental temporal si lo hubiera
                         
                     url_insert_detalles = f"{URL_SUPABASE}/rest/v1/factura_detalles"
                     res_ins_det = session.post(url_insert_detalles, json=detalles, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
@@ -146,7 +150,7 @@ class handler(BaseHTTPRequestHandler):
                         self._responder(502, {"status": "error", "message": f"Error al migrar los detalles: {res_ins_det.text}"})
                         return
 
-                # 4. Eliminar el registro de las tablas temporales
+                # 4. Eliminar el registro de las tablas temporales (la cascada de Supabase suele borrar los detalles temporales, o los borramos explícitamente)
                 url_del_detalles = f"{URL_SUPABASE}/rest/v1/detalles_factura_temporal?id_factura=eq.{id_factura}"
                 session.delete(url_del_detalles, headers=headers_supabase, timeout=10)
 
