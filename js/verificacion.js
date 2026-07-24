@@ -1,17 +1,12 @@
-// 1. Función principal que se dispara al hacer clic en el botón de búsqueda
-async function buscarFactura() {
-    const inputBusqueda = document.getElementById('inputBusqueda').value.trim();
-    
-    if (!inputBusqueda) {
-        mostrarModalError("Por favor, ingresa un ID de factura o una cédula para buscar.");
-        return;
-    }
+// Se ejecuta automáticamente al cargar la página de verificación
+document.addEventListener('DOMContentLoaded', () => {
+    cargarFacturasPendientes();
+});
 
+// 1. Carga y muestra automáticamente todas las facturas pendientes al entrar
+async function cargarFacturasPendientes() {
     mostrarCargando(true);
-
     try {
-        // Hacemos la petición GET al endpoint de Python en Vercel 
-        // (Asegúrate de que el nombre del archivo en la carpeta api/ coincida con esta ruta, ej: api/verificar.py)
         const response = await fetch('/api/gestion-temporales', {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
@@ -31,41 +26,71 @@ async function buscarFactura() {
         mostrarCargando(false);
 
         if (json.status === "success") {
-            // Buscamos dentro de la lista de pendientes el ID o la cédula que escribió el usuario
             const facturas = json.data || [];
-            const facturaEncontrada = facturas.find(f => 
-                f.id_factura === inputBusqueda || f.cedula === inputBusqueda
-            );
-
-            if (!facturaEncontrada) {
-                mostrarModalError("No se encontró ninguna factura pendiente con ese ID o cédula.");
-                limpiarVistaVerificacion();
-                return;
-            }
-
-            renderizarFacturaEncontrada(facturaEncontrada);
+            renderizarListaPendientes(facturas);
         } else {
-            mostrarModalError("Error: " + json.message);
+            mostrarModalError("Error al cargar facturas: " + json.message);
         }
 
     } catch (error) {
         mostrarCargando(false);
-        mostrarModalError("Error de conexión al buscar la factura: " + error.message);
+        mostrarModalError("Error de conexión al cargar las facturas: " + error.message);
     }
 }
 
-// 2. Renderizar los datos en la interfaz
-function renderizarFacturaEncontrada(factura) {
-    const contenedorCliente = document.getElementById('infoFacturaContainer');
-    contenedorCliente.style.display = 'block';
-    contenedorCliente.innerHTML = `
-        <p><strong>Cliente:</strong> ${factura.nombre || 'N/A'} ${factura.apellido || ''}</p>
-        <p><strong>Cédula:</strong> ${factura.cedula || 'N/A'}</p>
-        <p><strong>Teléfono:</strong> ${factura.telefono || 'N/A'}</p>
-        <p><strong>ID Factura:</strong> ${factura.id_factura}</p>
-        <p><strong>Estado:</strong> <span style="text-transform: uppercase; font-weight: 600; color: #e67e22;">${factura.estado}</span></p>
+// 2. Renderiza la lista completa de facturas pendientes en la interfaz
+function renderizarListaPendientes(facturas) {
+    const contenedor = document.getElementById('infoFacturaContainer');
+    
+    if (!facturas || facturas.length === 0) {
+        contenedor.style.display = 'block';
+        contenedor.innerHTML = `<p style="text-align: center; color: #888; padding: 20px;">No hay facturas pendientes en este momento.</p>`;
+        limpiarTablaProductos();
+        return;
+    }
+
+    contenedor.style.display = 'block';
+    
+    // Generamos un selector o listado visual de las facturas pendientes encontradas
+    let htmlLista = `
+        <h3 style="margin-bottom: 10px; font-size: 16px; color: #333;">Facturas Pendientes (${facturas.length})</h3>
+        <div style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;">
     `;
 
+    facturas.forEach((factura, index) => {
+        htmlLista += `
+            <div style="padding: 10px; border: 1px solid #ddd; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; background: #f9f9f9;">
+                <div>
+                    <p style="margin: 0; font-weight: 600;">ID: ${factura.id_factura} - ${factura.nombre || 'Cliente'} ${factura.apellido || ''}</p>
+                    <p style="margin: 0; font-size: 13px; color: #666;">Cédula: ${factura.cedula || 'N/A'} | Total: $${Number(factura.total_usd || 0).toFixed(2)}</p>
+                </div>
+                <button class="btn-primary" style="padding: 6px 12px; font-size: 13px;" onclick="seleccionarFacturaPendiente(${index})">
+                    Ver Detalles
+                </button>
+            </div>
+        `;
+    });
+
+    htmlLista += `</div>`;
+    contenedor.innerHTML = htmlLista;
+
+    // Guardamos temporalmente las facturas en una variable global del script para seleccionarlas rápido
+    window._facturasPendientesCache = facturas;
+
+    // Si hay al menos una, seleccionamos la primera por defecto automáticamente
+    if (facturas.length > 0) {
+        seleccionarFacturaPendiente(0);
+    }
+}
+
+// 3. Muestra los detalles y productos de la factura seleccionada
+function seleccionarFacturaPendiente(index) {
+    const facturas = window._facturasPendientesCache || [];
+    const factura = facturas[index];
+
+    if (!factura) return;
+
+    // Renderizar productos de esta factura en la tabla
     const tablaProductos = document.getElementById('tablaVerificacionProductos');
     tablaProductos.innerHTML = '';
 
@@ -81,12 +106,13 @@ function renderizarFacturaEncontrada(factura) {
                 <td>${prod.nombre_producto}</td>
                 <td>$${Number(prod.precio_unitario).toFixed(2)}</td>
                 <td>$${Number(prod.precio_total).toFixed(2)}</td>
-                <td>Bs ${Number(prod.precio_total).toFixed(2)}</td>
+                <td>Bs ${Number(prod.precio_total * (factura.tasa_cambio || 1)).toFixed(2)}</td>
             `;
             tablaProductos.appendChild(tr);
         });
     }
 
+    // Renderizar totales
     const contenedorTotales = document.getElementById('totalesVerificacion');
     contenedorTotales.innerHTML = `
         <div style="text-align: right;">
@@ -96,15 +122,16 @@ function renderizarFacturaEncontrada(factura) {
         </div>
     `;
 
+    // Botón de acción para aprobar
     const contenedorAcciones = document.getElementById('accionesVerificacion');
     contenedorAcciones.innerHTML = `
         <button class="btn-primary" onclick="aprobarFactura('${factura.id_factura}')">
-            <i class="fas fa-check-circle"></i> Aprobar / Verificar Pago
+            <i class="fas fa-check-circle"></i> Aprobar / Verificar Pago (ID: ${factura.id_factura})
         </button>
     `;
 }
 
-// 3. Editar una factura temporal (petición PATCH al endpoint de Python)
+// 4. Actualizar factura temporal (PATCH al endpoint Python)
 async function actualizarFacturaTemporal(idFactura, datosModificados) {
     mostrarCargando(true);
     try {
@@ -113,7 +140,7 @@ async function actualizarFacturaTemporal(idFactura, datosModificados) {
             ...datosModificados
         };
 
-        const response = await fetch('/api/verificar', {
+        const response = await fetch('/api/gestion-temporales', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -144,19 +171,18 @@ async function actualizarFacturaTemporal(idFactura, datosModificados) {
     }
 }
 
-// 4. Aprobar factura cambiando su estado
+// 5. Aprobar factura cambiando su estado
 async function aprobarFactura(idFactura) {
     await actualizarFacturaTemporal(idFactura, { estado: 'aprobado' });
 }
 
-function limpiarVistaVerificacion() {
-    document.getElementById('infoFacturaContainer').style.display = 'none';
-    document.getElementById('tablaVerificacionProductos').innerHTML = `<tr><td colspan="5" style="text-align: center; color: #888;">No hay factura seleccionada o cargada.</td></tr>`;
+function limpiarTablaProductos() {
+    document.getElementById('tablaVerificacionProductos').innerHTML = `<tr><td colspan="5" style="text-align: center; color: #888;">No hay productos para mostrar.</td></tr>`;
     document.getElementById('totalesVerificacion').innerHTML = '';
     document.getElementById('accionesVerificacion').innerHTML = '';
 }
 
-// Funciones de modales
+// Funciones auxiliares de modales
 function mostrarCargando(mostrar) {
     const modal = document.getElementById('statusModal');
     const loading = document.getElementById('modalLoading');
@@ -195,8 +221,7 @@ function cerrarModalError() {
     document.getElementById('statusModal').classList.add('hidden');
 }
 
-// EXPONER FUNCIONES AL ÁMBITO GLOBAL (Soluciona el error ReferenceError)
-window.buscarFactura = buscarFactura;
-window.actualizarFacturaTemporal = actualizarFacturaTemporal;
+// EXPONER FUNCIONES AL ÁMBITO GLOBAL
+window.seleccionarFacturaPendiente = seleccionarFacturaPendiente;
 window.aprobarFactura = aprobarFactura;
 window.cerrarModalError = cerrarModalError;
