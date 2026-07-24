@@ -110,10 +110,9 @@ class handler(BaseHTTPRequestHandler):
                 factura_temp = res_temp.json()[0]
                 detalles = factura_temp.pop("detalles_factura_temporal", [])
 
-                # Limpiamos campos temporales o que usen 'created_at' / nombres distintos en la definitiva
-                factura_temp.pop("created_at", None)
-                factura_temp.pop("estado", None)
-                factura_temp.pop("fecha_expiracion", None)
+                # Limpieza exhaustiva de todos los campos exclusivos de la tabla temporal que no van en la definitiva
+                for campo in ["creado_en", "created_at", "estado", "fecha_expiracion"]:
+                    factura_temp.pop(campo, None)
 
                 # 2. Insertar en la tabla definitiva 'facturas'
                 url_insert_factura = f"{URL_SUPABASE}/rest/v1/facturas"
@@ -126,9 +125,9 @@ class handler(BaseHTTPRequestHandler):
                 # 3. Insertar los detalles en la tabla definitiva 'factura_detalles' (si existen)
                 if detalles:
                     for det in detalles:
-                        det.pop("id", None)                 # Eliminar ID autoincremental temporal
-                        det.pop("created_at", None)         # Limpiar campo created_at si aplica
-                        det.pop("fecha_expiracion", None)   # Por si acaso
+                        det.pop("id", None)
+                        for campo in ["creado_en", "created_at", "fecha_expiracion"]:
+                            det.pop(campo, None)
                         
                     url_insert_detalles = f"{URL_SUPABASE}/rest/v1/factura_detalles"
                     res_ins_det = session.post(url_insert_detalles, json=detalles, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
