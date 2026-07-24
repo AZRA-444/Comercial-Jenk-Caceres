@@ -4,7 +4,8 @@ import json
 import requests
 import re
 import time
-from requests.adapters import HTTPAdapter, Retry
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry  # <-- ¡AQUÍ ESTÁ LA CORRECCIÓN!
 
 ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
 
@@ -36,8 +37,7 @@ retries = Retry(
 session.mount("https://", HTTPAdapter(max_retries=retries))
 
 def validar_factura(data):
-    """Valida los datos mínimos antes de tocar la base de datos.
-    Devuelve un mensaje de error (str) o None si todo está bien."""
+    """Valida los datos mínimos antes de tocar la base de datos."""
     if not isinstance(data, dict):
         return "El cuerpo de la solicitud debe ser un objeto JSON"
 
@@ -75,10 +75,6 @@ def validar_factura(data):
         if len(str(nombre)) > LONGITUD_MAXIMA_NOMBRE_PRODUCTO:
             return f"Producto #{i+1}: el nombre supera los {LONGITUD_MAXIMA_NOMBRE_PRODUCTO} caracteres permitidos"
 
-        # Todas las conversiones numéricas se hacen con try/except: antes,
-        # un valor no numérico (por ejemplo un texto) hacía que float()
-        # lanzara una excepción sin capturar y el servidor respondiera con
-        # un error 500 en lugar de un mensaje claro de validación.
         try:
             cantidad_num = float(cantidad)
         except (TypeError, ValueError):
@@ -139,7 +135,6 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if content_length > MAX_BYTES_SOLICITUD:
-            # Se corta antes de leer el cuerpo completo en memoria.
             self._responder(413, {"status": "error", "message": "La solicitud supera el tamaño máximo permitido"})
             return
 
@@ -150,11 +145,6 @@ class handler(BaseHTTPRequestHandler):
             self._responder(400, {"status": "error", "message": "JSON inválido en la solicitud"})
             return
 
-        # Todo el flujo de guardado queda protegido por un try/except general:
-        # antes, cualquier error inesperado (por ejemplo un campo con un tipo
-        # de dato raro que ninguna validación anticipara) tumbaba la función
-        # sin devolver una respuesta JSON válida, y el frontend terminaba
-        # mostrando "el servidor no devolvió JSON" en vez de un error claro.
         try:
             self._procesar_factura(factura_data)
         except Exception as e:
@@ -165,15 +155,12 @@ class handler(BaseHTTPRequestHandler):
             })
 
     def _procesar_factura(self, factura_data):
-        # === 1. Validación previa (evita insertos parciales por datos malos) ===
         error_validacion = validar_factura(factura_data)
         if error_validacion:
             self._responder(400, {"status": "error", "message": error_validacion})
             return
 
-        # === 2. Guardado ATÓMICO vía RPC ===
         tiempo_expiracion = time.time() + (1 * 3600)
-        # Formateamos a string para PostgreSQL (YYYY-MM-DD HH:MM:SS)
         fecha_expiracion_str = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(tiempo_expiracion))
 
         p_factura = {
@@ -209,6 +196,7 @@ class handler(BaseHTTPRequestHandler):
             "Content-Type": "application/json",
         }
 
+        # URL apuntando a la función RPC (Remote Procedure Call) en Supabase
         url_rpc = f"{URL_SUPABASE}/rest/v1/rpc/guardar_factura_temporal"
 
         try:
@@ -223,10 +211,11 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if res.status_code not in (200, 204):
-            # La transacción se revirtió por completo en Postgres: nada quedó guardado a medias.
             print(f"⚠️ Falló guardar_factura_completa: {res.status_code} {res.text}")
             self._responder(502, {
                 "status": "error",
                 "message": f"No se pudo guardar la factura: {res.text}",
             })
-            return
+            return 
+            
+        self._responder(200, {"status": "success", "message": "Factura temporal guardada correctamente"})
