@@ -40,24 +40,15 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode('utf-8'))
 
     def do_GET(self):
-        """
-        Al hacer una petición GET a este archivo en Vercel, 
-        automáticamente consultará las facturas temporales.
-        """
+        """Consulta automáticamente las facturas temporales pendientes."""
         self._consultar_temporales()
 
     def do_PATCH(self):
-        """
-        Al hacer una petición PATCH a este archivo en Vercel, 
-        automáticamente editará la factura temporal.
-        """
+        """Edita o aprueba la factura temporal."""
         self._editar_temporal()
         
     def do_POST(self):
-        """
-        Opcional: Por si tu frontend tiene problemas enviando PATCH, 
-        puedes usar POST como alternativa para editar.
-        """
+        """Alternativa para editar/aprobar."""
         self._editar_temporal()
 
     # --- LÓGICA DE LAS ACCIONES ---
@@ -119,29 +110,25 @@ class handler(BaseHTTPRequestHandler):
                 factura_temp = res_temp.json()[0]
                 detalles = factura_temp.pop("detalles_factura_temporal", [])
 
-                # Cambiamos el estado a aprobado para la tabla definitiva
-                factura_temp["estado"] = "aprobado"
-
-                factura_temp = res_temp.json()[0]
-                detalles = factura_temp.pop("detalles_factura_temporal", [])
-
-                # Limpiamos los campos que no existen en la tabla definitiva 'facturas'
-                factura_temp.pop("creado_en", None)
-                factura_temp.pop("estado", None) # <-- Eliminamos el estado para evitar el error de columna inexistente
+                # Limpiamos campos temporales o que usen 'created_at' / nombres distintos en la definitiva
+                factura_temp.pop("created_at", None)
+                factura_temp.pop("estado", None)
+                factura_temp.pop("fecha_expiracion", None)
 
                 # 2. Insertar en la tabla definitiva 'facturas'
                 url_insert_factura = f"{URL_SUPABASE}/rest/v1/facturas"
                 res_ins_fac = session.post(url_insert_factura, json=factura_temp, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
-               
+                
                 if res_ins_fac.status_code not in (200, 201, 204):
                     self._responder(502, {"status": "error", "message": f"Error al migrar a la tabla facturas: {res_ins_fac.text}"})
                     return
 
                 # 3. Insertar los detalles en la tabla definitiva 'factura_detalles' (si existen)
                 if detalles:
-                    # Opcional: Limpiamos campos internos o de relación si Supabase los genera automáticamente
                     for det in detalles:
-                        det.pop("id", None) # Eliminar ID autoincremental temporal si lo hubiera
+                        det.pop("id", None)                 # Eliminar ID autoincremental temporal
+                        det.pop("created_at", None)         # Limpiar campo created_at si aplica
+                        det.pop("fecha_expiracion", None)   # Por si acaso
                         
                     url_insert_detalles = f"{URL_SUPABASE}/rest/v1/factura_detalles"
                     res_ins_det = session.post(url_insert_detalles, json=detalles, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
@@ -150,7 +137,7 @@ class handler(BaseHTTPRequestHandler):
                         self._responder(502, {"status": "error", "message": f"Error al migrar los detalles: {res_ins_det.text}"})
                         return
 
-                # 4. Eliminar el registro de las tablas temporales (la cascada de Supabase suele borrar los detalles temporales, o los borramos explícitamente)
+                # 4. Eliminar el registro de las tablas temporales
                 url_del_detalles = f"{URL_SUPABASE}/rest/v1/detalles_factura_temporal?id_factura=eq.{id_factura}"
                 session.delete(url_del_detalles, headers=headers_supabase, timeout=10)
 
