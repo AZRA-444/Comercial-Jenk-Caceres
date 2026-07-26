@@ -1,19 +1,30 @@
 /**
  * verificacion.js
- * Lógica del módulo de verificación de pagos.
- * 
+ * Módulo de verificación de pagos.
+ *
  * Flujo:
- *  1. Al cargar → cargarFacturasPendientes()
- *  2. El usuario hace click en una tarjeta → seleccionarFactura(index)
- *  3. El usuario escribe en el buscador → filtrarFacturas()
- *  4. Botón "Aprobar" → aprobarFacturaActual()
+ *  1. Carga → cargarFacturasPendientes()
+ *  2. Click en tarjeta → seleccionarFactura(index)
+ *  3. CRUD de productos: agregar / eliminar / toggle descuento
+ *  4. Formulario de pago → verSelectMetodoPago()
+ *  5. Botón "Aprobar" → aprobarFacturaActual()
  */
 
 // ---------------------------------------------------------------------------
 // Estado del módulo
 // ---------------------------------------------------------------------------
-let _facturasPendientes = [];  // Todas las facturas cargadas
-let _facturaActual = null;     // Factura actualmente seleccionada
+let _facturasPendientes = [];
+let _facturaActual      = null;
+
+// Estado editable de la factura seleccionada (se reconstruye al seleccionar)
+const verState = {
+  productos:    [],   // copia editable de detalles_factura_temporal
+  tasaCambio:   1,
+  subtotalUSD:  0,
+  descuentoUSD: 0,
+  totalUSD:     0,
+  totalBS:      0,
+};
 
 // ---------------------------------------------------------------------------
 // Inicialización
@@ -21,11 +32,29 @@ let _facturaActual = null;     // Factura actualmente seleccionada
 document.addEventListener('DOMContentLoaded', () => {
   cargarFacturasPendientes();
 
-  document.getElementById('inputBusqueda').addEventListener('input', filtrarFacturas);
+  document.getElementById('inputBusqueda')
+    .addEventListener('input', filtrarFacturas);
 
-  document.getElementById('btnRefrescar').addEventListener('click', () => {
-    cargarFacturasPendientes();
-  });
+  document.getElementById('btnRefrescar')
+    .addEventListener('click', cargarFacturasPendientes);
+
+  // Calcular precio total automáticamente al tipear cantidad o precio
+  const cantInput = document.getElementById('verCantProduct');
+  const prcInput  = document.getElementById('verPrcUndProduct');
+  const totInput  = document.getElementById('verPrcTotalProduct');
+
+  const calcTotal = () => {
+    const cant = Number(cantInput.value) || 0;
+    const prc  = Number(prcInput.value)  || 0;
+    totInput.value = (cant * prc).toFixed(2);
+  };
+
+  cantInput.addEventListener('input', calcTotal);
+  prcInput.addEventListener('input',  calcTotal);
+
+  // Delegación de eventos para los botones de la tabla
+  document.getElementById('tablaVerificacionProductos')
+    .addEventListener('click', _manejarClickTabla);
 });
 
 // ---------------------------------------------------------------------------
@@ -35,11 +64,10 @@ async function cargarFacturasPendientes() {
   setListaEstado('loading');
 
   try {
-    const res = await fetch('/api/gestion-temporales', {
+    const res  = await fetch('/api/gestion-temporales', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
-
     const json = await _parseJSON(res);
     if (!json) return;
 
@@ -47,8 +75,6 @@ async function cargarFacturasPendientes() {
       _facturasPendientes = json.data || [];
       renderizarLista(_facturasPendientes);
       document.getElementById('badgeCount').textContent = _facturasPendientes.length;
-
-      // Auto-selecciona la primera si hay resultados
       if (_facturasPendientes.length > 0) seleccionarFactura(0);
     } else {
       setListaEstado('error', json.message);
@@ -89,7 +115,7 @@ function renderizarLista(facturas) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Seleccionar una factura y mostrar su detalle
+// 3. Seleccionar factura y construir estado editable
 // ---------------------------------------------------------------------------
 function seleccionarFactura(index) {
   const factura = _facturasPendientes[index];
@@ -97,71 +123,551 @@ function seleccionarFactura(index) {
   _facturaActual = factura;
 
   // Marcar tarjeta activa
-  document.querySelectorAll('.factura-card').forEach(el => {
-    el.classList.toggle('activa', parseInt(el.dataset.index) === index);
-  });
+  document.querySelectorAll('.factura-card').forEach(el =>
+    el.classList.toggle('activa', parseInt(el.dataset.index) === index)
+  );
 
-  // Rellenar encabezado
-  document.getElementById('detailId').textContent = 'ID: ' + factura.id_factura;
+  // Encabezado
+  document.getElementById('detailId').textContent =
+    'ID: ' + factura.id_factura;
   document.getElementById('detailCliente').textContent =
     `${factura.nombre || ''} ${factura.apellido || ''}`.trim() || 'Cliente';
 
-  // Rellenar info del cliente
-  document.getElementById('detailCedula').textContent   = factura.cedula    || 'N/A';
-  document.getElementById('detailTelefono').textContent = factura.telefono  || 'N/A';
-  document.getElementById('detailVendedor').textContent = factura.vendedor  || 'N/A';
+  // Info cliente
+  document.getElementById('detailCedula').textContent    = factura.cedula    || 'N/A';
+  document.getElementById('detailTelefono').textContent  = factura.telefono  || 'N/A';
+  document.getElementById('detailVendedor').textContent  = factura.vendedor  || 'N/A';
   document.getElementById('detailMetodoPago').textContent = formatMetodoPago(factura.metodo_pago);
 
-  // Tabla de productos
-  const tbody = document.getElementById('tablaVerificacionProductos');
-  const detalles = factura.detalles_factura_temporal || [];
-  const tasaCambio = factura.tasa_cambio || 1;
+  // Construir estado editable de productos
+  const detalles   = factura.detalles_factura_temporal || [];
+  verState.tasaCambio = factura.tasa_cambio || 1;
 
-  if (detalles.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">Sin productos registrados.</td></tr>`;
+  verState.productos = detalles.map(p => ({
+    nombre:            p.nombre_producto,
+    cantidad:          Number(p.cantidad),
+    precioUnitario:    Number(p.precio_unitario),
+    precioTotal:       Number(p.precio_total),
+    excluidoDescuento: false,
+  }));
+
+  // Preseleccionar método de pago si ya viene en la factura
+  const selectMetodo = document.getElementById('verMetodoPago');
+  if (factura.metodo_pago && selectMetodo) {
+    selectMetodo.value = factura.metodo_pago;
+    verSelectMetodoPago(factura.metodo_pago);
   } else {
-    tbody.innerHTML = detalles.map(p => `
-      <tr>
-        <td>${p.cantidad}</td>
-        <td>${escapeHtml(p.nombre_producto)}</td>
-        <td class="text-right">$${Number(p.precio_unitario).toFixed(2)}</td>
-        <td class="text-right">$${Number(p.precio_total).toFixed(2)}</td>
-        <td class="text-right">Bs ${(Number(p.precio_total) * tasaCambio).toFixed(2)}</td>
-      </tr>
-    `).join('');
+    selectMetodo.value = '';
+    document.getElementById('verPaymentDetails').innerHTML = '';
   }
 
-  // Totales
-  document.getElementById('totSubtotalUsd').textContent = `$${Number(factura.subtotal_usd || 0).toFixed(2)}`;
-  document.getElementById('totTotalUsd').textContent    = `$${Number(factura.total_usd    || 0).toFixed(2)}`;
-  document.getElementById('totTotalBs').textContent     = `Bs ${Number(factura.total_bs  || 0).toFixed(2)}`;
-
-  // Mostrar panel de detalle
+  // Mostrar panel
   document.getElementById('detailEmpty').classList.add('hidden');
   document.getElementById('detailContent').classList.remove('hidden');
+
+  // Limpiar formulario de agregar producto
+  _limpiarFormAgregar();
+
+  // Renderizar tabla y totales
+  verActualizarTabla();
 }
 
 // ---------------------------------------------------------------------------
-// 4. Filtro de búsqueda en tiempo real
+// 4. CRUD — Agregar producto
 // ---------------------------------------------------------------------------
-function filtrarFacturas() {
-  const q = document.getElementById('inputBusqueda').value.toLowerCase().trim();
+function verAgregarProducto() {
+  const cant = Number(document.getElementById('verCantProduct').value);
+  const name = document.getElementById('verNameProduct').value.trim();
+  const prc  = Number(document.getElementById('verPrcUndProduct').value);
+  const tot  = Number(document.getElementById('verPrcTotalProduct').value);
 
-  if (!q) {
-    renderizarLista(_facturasPendientes);
+  if (!name || cant <= 0 || prc <= 0) {
+    alert('Por favor, llena correctamente los datos del producto (cantidad, nombre y precio).');
     return;
   }
 
+  verState.productos.push({
+    nombre:            name,
+    cantidad:          cant,
+    precioUnitario:    prc,
+    precioTotal:       tot || cant * prc,
+    excluidoDescuento: false,
+  });
+
+  _limpiarFormAgregar();
+  verActualizarTabla();
+}
+
+// ---------------------------------------------------------------------------
+// 4b. CRUD — Delegación de eventos en la tabla
+// ---------------------------------------------------------------------------
+function _manejarClickTabla(e) {
+  const btnEliminar = e.target.closest('.btn-eliminar');
+  if (btnEliminar) {
+    const idx = parseInt(btnEliminar.dataset.index, 10);
+    verState.productos.splice(idx, 1);
+    verActualizarTabla();
+    return;
+  }
+
+  const btnToggle = e.target.closest('.btn-toggle-desc');
+  if (btnToggle) {
+    const idx = parseInt(btnToggle.dataset.index, 10);
+    const p   = verState.productos[idx];
+    if (p) {
+      p.excluidoDescuento = !p.excluidoDescuento;
+      verActualizarTabla();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. Renderizar tabla editable y recalcular totales
+// ---------------------------------------------------------------------------
+function verActualizarTabla() {
+  const tbody = document.getElementById('tablaVerificacionProductos');
+  const tasa  = verState.tasaCambio;
+
+  if (!verState.productos || verState.productos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="table-empty">Sin productos. Agrega uno arriba.</td></tr>`;
+    _actualizarTotalesUI(0, 0, 0, 0);
+    return;
+  }
+
+  tbody.innerHTML = verState.productos.map((p, i) => {
+    const excluido = !!p.excluidoDescuento;
+    const totalBS  = (p.precioTotal * tasa).toFixed(2);
+    return `
+      <tr>
+        <td>${p.cantidad}</td>
+        <td>${escapeHtml(p.nombre)}</td>
+        <td class="text-right">$${p.precioUnitario.toFixed(2)}</td>
+        <td class="text-right">$${p.precioTotal.toFixed(2)}</td>
+        <td class="text-right">Bs ${totalBS}</td>
+        <td class="text-center acciones-producto">
+          <button
+            class="btn-toggle-desc${excluido ? ' active' : ''}"
+            data-index="${i}"
+            title="${excluido ? 'Volver a incluir en el descuento' : 'Sacar del descuento'}"
+          >
+            <i class="fa-solid ${excluido ? 'fa-rotate-left' : 'fa-tag'}"></i>
+          </button>
+          <button class="btn-eliminar" data-index="${i}" title="Eliminar producto">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Calcular totales con lógica de descuento igual a facturacion.js
+  const descontables = verState.productos.filter(p => !p.excluidoDescuento);
+  const excluidos    = verState.productos.filter(p =>  p.excluidoDescuento);
+
+  const subDescUSD = descontables.reduce((a, p) => a + p.precioTotal, 0);
+  const subExcUSD  = excluidos.reduce((a, p) => a + p.precioTotal, 0);
+  const subTotalUSD = subDescUSD + subExcUSD;
+
+  let porcentaje = 0;
+  if      (subDescUSD > 150) porcentaje = 20;
+  else if (subDescUSD >  50) porcentaje = 15;
+  else if (subDescUSD >  10) porcentaje = 10;
+
+  const descuentoUSD = subDescUSD * (porcentaje / 100);
+  const totalUSD     = subDescUSD - descuentoUSD + subExcUSD;
+  const totalBS      = totalUSD * tasa;
+
+  verState.subtotalUSD  = subTotalUSD;
+  verState.descuentoUSD = descuentoUSD;
+  verState.totalUSD     = totalUSD;
+  verState.totalBS      = totalBS;
+
+  _actualizarTotalesUI(subTotalUSD, descuentoUSD, totalUSD, totalBS);
+
+  // Actualizar monto en los detalles de pago si ya están visibles
+  const metodo = document.getElementById('verMetodoPago').value;
+  if (metodo) _actualizarMontoPago(metodo, totalUSD, totalBS);
+}
+
+function _actualizarTotalesUI(subtotal, descuento, total, totalBS) {
+  document.getElementById('totSubtotalUsd').textContent = `$${subtotal.toFixed(2)}`;
+  document.getElementById('totDescuento').textContent   = `-$${descuento.toFixed(2)}`;
+  document.getElementById('totTotalUsd').textContent    = `$${total.toFixed(2)}`;
+  document.getElementById('totTotalBs').textContent     = `Bs ${totalBS.toFixed(2)}`;
+}
+
+// ---------------------------------------------------------------------------
+// 6. Módulo de pago — render dinámico según método
+// ---------------------------------------------------------------------------
+function verSelectMetodoPago(valor) {
+  const container = document.getElementById('verPaymentDetails');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const totalUSD = verState.totalUSD;
+  const totalBS  = verState.totalBS;
+
+  const montoHeader = `
+    <div style="grid-column: 1 / -1; background: var(--accent-soft); border: 1px solid rgba(56,189,248,.25);
+                border-radius: 10px; padding: 14px 16px; margin-bottom: 4px;">
+      <p style="color: var(--text-secondary); font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;">
+        Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'PVC' ? 'transferir' : 'pagar'}:
+      </p>
+      <p class="ver-monto-display" style="color: var(--accent); font-size: 1.4rem; font-weight: 700; margin:0;">
+        $${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>
+      </p>
+    </div>`;
+
+  if (valor === 'PM') {
+    container.innerHTML = `
+      ${montoHeader}
+      <label class="form-field">Banco Destino
+        <select id="verBankSelect">
+          <option value="" disabled selected>Seleccione un banco</option>
+          <option value="Banesco">Banesco</option>
+          <option value="Venezuela">Banco de Venezuela</option>
+          <option value="Provincial">Provincial</option>
+          <option value="Banplus">Banplus</option>
+        </select>
+      </label>
+      <label class="form-field">Número de Referencia
+        <input type="number" id="verPmRef" placeholder="Últimos 4 dígitos" />
+      </label>
+      <div class="form-field capture-container" style="grid-column: 1 / -1;">
+        <span class="capture-label">Comprobante de Pago</span>
+        <input type="file" id="verReceiptCapture" accept="image/*" capture="environment"
+               style="display:none;" onchange="verPreviewReceipt(this)" />
+        <button type="button" class="btn-secondary btn-capture"
+                onclick="document.getElementById('verReceiptCapture').click()">
+          <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
+        </button>
+        <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
+      </div>`;
+
+  } else if (valor === 'PVD' || valor === 'PVC') {
+    container.innerHTML = montoHeader;
+
+  } else if (valor === 'ED') {
+    container.innerHTML = `
+      ${montoHeader}
+      <label class="form-field">Monto Recibido ($)
+        <input type="number" id="verEDMontoRecibido" placeholder="ej: 20" step="0.01" />
+      </label>
+      <label class="form-field">Vuelto a Entregar ($)
+        <input type="text" id="verEDVuelto" readonly placeholder="0.00" />
+      </label>
+      <label class="form-field" style="grid-column: 1 / -1;">Observaciones
+        <textarea id="verObsED" rows="3" placeholder="Detalla alguna novedad..."></textarea>
+      </label>`;
+
+    // Listener de vuelto
+    setTimeout(() => {
+      const recInput = document.getElementById('verEDMontoRecibido');
+      const vueltoIn = document.getElementById('verEDVuelto');
+      if (recInput && vueltoIn) {
+        recInput.addEventListener('input', () => {
+          const rec = Number(recInput.value) || 0;
+          vueltoIn.value = rec < verState.totalUSD
+            ? '0.00'
+            : `$${(rec - verState.totalUSD).toFixed(2)}`;
+        });
+      }
+    }, 0);
+
+  } else if (valor === 'EBS') {
+    container.innerHTML = `
+      ${montoHeader}
+      <label class="form-field">Monto Recibido (Bs)
+        <input type="number" id="verEBSMontoRecibido" placeholder="ej: 2500" step="0.01" />
+      </label>
+      <label class="form-field">Vuelto a Entregar (Bs)
+        <input type="text" id="verEBSVuelto" readonly placeholder="0.00" />
+      </label>`;
+
+    setTimeout(() => {
+      const recInput = document.getElementById('verEBSMontoRecibido');
+      const vueltoIn = document.getElementById('verEBSVuelto');
+      if (recInput && vueltoIn) {
+        recInput.addEventListener('input', () => {
+          const rec = Number(recInput.value) || 0;
+          vueltoIn.value = rec < verState.totalBS
+            ? '0.00'
+            : `${(rec - verState.totalBS).toFixed(2)}Bs`;
+        });
+      }
+    }, 0);
+
+  } else if (valor === 'OTROS') {
+    container.innerHTML = `
+      ${montoHeader}
+      <label class="form-field" style="grid-column: 1 / -1;">Observaciones
+        <textarea id="verObsOTROS" rows="3" placeholder="Detalla alguna novedad..."></textarea>
+      </label>
+      <div class="form-field capture-container" style="grid-column: 1 / -1;">
+        <span class="capture-label">Comprobante de Pago</span>
+        <input type="file" id="verReceiptCapture" accept="image/*" capture="environment"
+               style="display:none;" onchange="verPreviewReceipt(this)" />
+        <button type="button" class="btn-secondary btn-capture"
+                onclick="document.getElementById('verReceiptCapture').click()">
+          <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
+        </button>
+        <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
+      </div>`;
+  }
+}
+
+/** Actualiza solo el monto mostrado dentro del bloque de pago ya renderizado */
+function _actualizarMontoPago(metodo, totalUSD, totalBS) {
+  const el = document.querySelector('.ver-monto-display');
+  if (!el) return;
+  el.innerHTML = `$${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>`;
+}
+
+/** Preview del comprobante seleccionado */
+function verPreviewReceipt(input) {
+  const box = document.getElementById('verReceiptPreview');
+  if (!box) return;
+  if (input.files?.[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      box.style.display = 'block';
+      box.style.backgroundImage = `url('${e.target.result}')`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    box.style.display = 'none';
+    box.style.backgroundImage = 'none';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7. Validar formulario de pago antes de aprobar
+// ---------------------------------------------------------------------------
+function _validarPago() {
+  const metodo = document.getElementById('verMetodoPago')?.value;
+
+  if (!metodo) {
+    alert('Por favor selecciona un método de pago antes de aprobar.');
+    return false;
+  }
+
+  if (metodo === 'PM') {
+    const banco = document.getElementById('verBankSelect')?.value;
+    const ref   = document.getElementById('verPmRef')?.value.trim();
+    const comp  = document.getElementById('verReceiptCapture');
+
+    if (!banco) {
+      alert('Para Pago Móvil, selecciona un Banco Destino.');
+      return false;
+    }
+    if (!ref || ref.length < 4) {
+      alert('Para Pago Móvil, ingresa el Número de Referencia (mínimo 4 dígitos).');
+      return false;
+    }
+    if (!comp?.files?.length) {
+      alert('Para Pago Móvil, adjunta el comprobante de pago.');
+      return false;
+    }
+  }
+
+  if (metodo === 'ED') {
+    const monto = Number(document.getElementById('verEDMontoRecibido')?.value);
+    if (!monto || monto < verState.totalUSD) {
+      alert(`El monto recibido en $ es menor al total ($${verState.totalUSD.toFixed(2)}).`);
+      return false;
+    }
+  }
+
+  if (metodo === 'EBS') {
+    const monto = Number(document.getElementById('verEBSMontoRecibido')?.value);
+    if (!monto || monto < verState.totalBS) {
+      alert(`El monto recibido en Bs es menor al total (${verState.totalBS.toFixed(2)} Bs).`);
+      return false;
+    }
+  }
+
+  if (metodo === 'OTROS') {
+    const obs  = document.getElementById('verObsOTROS')?.value.trim();
+    const comp = document.getElementById('verReceiptCapture');
+    if (!obs) {
+      alert('Para el método OTROS, detalla las observaciones.');
+      return false;
+    }
+    if (!comp?.files?.length) {
+      alert('Para el método OTROS, adjunta el comprobante de pago.');
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// 8. Comprimir imagen comprobante
+// ---------------------------------------------------------------------------
+function _comprimirImagen(file, maxAncho = 1600, calidad = 0.75) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('El archivo no es una imagen'));
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxAncho) {
+        height = Math.round((height * maxAncho) / width);
+        width  = maxAncho;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('No se pudo preparar el canvas')); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('No se pudo comprimir la imagen')); return; }
+        resolve(new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }));
+      }, 'image/jpeg', calidad);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
+}
+
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 9. Aprobar factura — con datos de pago editados
+// ---------------------------------------------------------------------------
+async function aprobarFacturaActual() {
+  if (!_facturaActual) return;
+
+  // Validar que haya al menos un producto
+  if (!verState.productos || verState.productos.length === 0) {
+    alert('La factura no puede aprobarse sin productos.');
+    return;
+  }
+
+  // Validar formulario de pago
+  if (!_validarPago()) return;
+
+  const btn = document.getElementById('btnAprobar');
+  btn.disabled = true;
+  mostrarCargando(true);
+
+  // Procesar comprobante si existe
+  let comprobanteBase64 = null;
+  let comprobanteNombre = null;
+  let comprobanteTipo   = null;
+
+  const comprobanteInput = document.getElementById('verReceiptCapture');
+  if (comprobanteInput?.files?.[0]) {
+    let file = comprobanteInput.files[0];
+    try { file = await _comprimirImagen(file); }
+    catch (err) { console.warn('Compresión fallida, usando original:', err); }
+
+    if (file.size > 5 * 1024 * 1024) {
+      mostrarModalError('La imagen del comprobante no debe superar los 5 MB.');
+      btn.disabled = false;
+      return;
+    }
+    try {
+      comprobanteBase64 = await _fileToBase64(file);
+      comprobanteNombre = file.name;
+      comprobanteTipo   = file.type;
+    } catch (err) {
+      mostrarModalError('No se pudo procesar la imagen del comprobante.');
+      btn.disabled = false;
+      return;
+    }
+  }
+
+  const metodo = document.getElementById('verMetodoPago')?.value || 'OTROS';
+  const obs =
+    document.getElementById('verObsOTROS')?.value.trim() ||
+    document.getElementById('verObsED')?.value.trim()    || '';
+
+  const payload = {
+    id_factura: _facturaActual.id_factura,
+    estado:     'aprobado',
+
+    // Datos de pago actualizados
+    metodo_pago:  metodo,
+    banco:        document.getElementById('verBankSelect')?.value || 'N/A',
+    referencia:   document.getElementById('verPmRef')?.value      || 'N/A',
+    observaciones: obs || 'N/A',
+
+    comprobante_base64: comprobanteBase64,
+    comprobante_nombre: comprobanteNombre,
+    comprobante_tipo:   comprobanteTipo,
+
+    // Totales recalculados
+    subtotal_usd:  verState.subtotalUSD,
+    descuento_usd: verState.descuentoUSD,
+    total_usd:     verState.totalUSD,
+    total_bs:      verState.totalBS,
+
+    // Productos editados
+    productos: verState.productos.map(p => ({
+      nombre:        p.nombre,
+      cantidad:      p.cantidad,
+      precioUnitario: p.precioUnitario,
+      precioTotal:   p.precioTotal,
+    })),
+  };
+
+  try {
+    const res  = await fetch('/api/gestion-temporales', {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await _parseJSON(res);
+    if (!json) { btn.disabled = false; return; }
+
+    if (json.status === 'success') {
+      mostrarModalExito('Factura aprobada correctamente.');
+      setTimeout(() => {
+        cerrarModal();
+        limpiarDetalle();
+        cargarFacturasPendientes();
+      }, 1600);
+      setTimeout(() => window.location.reload(), 1800);
+    } else {
+      mostrarModalError(json.message || 'No se pudo aprobar la factura.');
+      btn.disabled = false;
+    }
+  } catch (err) {
+    mostrarModalError('Error de conexión: ' + err.message);
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Filtro de búsqueda
+// ---------------------------------------------------------------------------
+function filtrarFacturas() {
+  const q = document.getElementById('inputBusqueda').value.toLowerCase().trim();
+  if (!q) { renderizarLista(_facturasPendientes); return; }
+
   const filtradas = _facturasPendientes.filter(f =>
-    (f.id_factura  || '').toLowerCase().includes(q) ||
-    (f.cedula      || '').toLowerCase().includes(q) ||
-    (f.nombre      || '').toLowerCase().includes(q) ||
-    (f.apellido    || '').toLowerCase().includes(q)
+    (f.id_factura || '').toLowerCase().includes(q) ||
+    (f.cedula     || '').toLowerCase().includes(q) ||
+    (f.nombre     || '').toLowerCase().includes(q) ||
+    (f.apellido   || '').toLowerCase().includes(q)
   );
 
-  // Mantenemos los índices originales para que onclick funcione bien
   const lista = document.getElementById('listaPendientes');
-  if (filtradas.length === 0) {
+  if (!filtradas.length) {
     lista.innerHTML = `
       <div class="empty-state">
         <i class="fas fa-magnifying-glass"></i>
@@ -185,67 +691,30 @@ function filtrarFacturas() {
       </div>`;
   }).join('');
 
-  // Re-marcar activa si aplica
   if (_facturaActual) {
     const idxActual = _facturasPendientes.indexOf(_facturaActual);
-    document.querySelectorAll('.factura-card').forEach(el => {
-      el.classList.toggle('activa', parseInt(el.dataset.index) === idxActual);
-    });
+    document.querySelectorAll('.factura-card').forEach(el =>
+      el.classList.toggle('activa', parseInt(el.dataset.index) === idxActual)
+    );
   }
 }
 
 // ---------------------------------------------------------------------------
-// 5. Aprobar la factura actualmente seleccionada
-// ---------------------------------------------------------------------------
-async function aprobarFacturaActual() {
-  if (!_facturaActual) return;
-  const id = _facturaActual.id_factura;
-
-  document.getElementById('btnAprobar').disabled = true;
-  mostrarCargando(true);
-
-  try {
-    const res = await fetch('/api/gestion-temporales', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_factura: id, estado: 'aprobado' }),
-    });
-
-    const json = await _parseJSON(res);
-    if (!json) {
-      document.getElementById('btnAprobar').disabled = false;
-      return;
-    }
-
-    if (json.status === 'success') {
-      mostrarModalExito('Factura aprobada correctamente.');
-      // Recargar la lista tras 1.6s
-      setTimeout(() => {
-        cerrarModal();
-        limpiarDetalle();
-        cargarFacturasPendientes();
-      }, 1600);
-      setTimeout(() => {
-      window.location.reload();
-      }, 1800);
-    } else {
-      mostrarModalError(json.message || 'No se pudo aprobar la factura.');
-      document.getElementById('btnAprobar').disabled = false;
-    }
-  } catch (err) {
-    mostrarModalError('Error de conexión: ' + err.message);
-    document.getElementById('btnAprobar').disabled = false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers de UI
+// Helpers UI
 // ---------------------------------------------------------------------------
 function limpiarDetalle() {
   _facturaActual = null;
   document.getElementById('detailEmpty').classList.remove('hidden');
   document.getElementById('detailContent').classList.add('hidden');
   document.querySelectorAll('.factura-card').forEach(el => el.classList.remove('activa'));
+}
+
+function _limpiarFormAgregar() {
+  ['verCantProduct', 'verNameProduct', 'verPrcUndProduct', 'verPrcTotalProduct']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
 }
 
 function setListaEstado(estado, mensaje = '') {
@@ -266,14 +735,8 @@ function setListaEstado(estado, mensaje = '') {
 }
 
 function formatMetodoPago(codigo) {
-  const map = {
-    PM:    'Pago Móvil',
-    PVD:   'Pago V/D',
-    PVC:   'Pago V/C',
-    ED:    'Efectivo $',
-    EBS:   'Efectivo Bs',
-    OTROS: 'Otro',
-  };
+  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D', PVC: 'Pago V/C',
+                ED: 'Efectivo $', EBS: 'Efectivo Bs', OTROS: 'Otro' };
   return map[codigo] || codigo || 'N/A';
 }
 
@@ -285,12 +748,10 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-/** Parsea JSON de una respuesta fetch; muestra error en modal si falla. */
 async function _parseJSON(res) {
   const texto = await res.text();
-  try {
-    return JSON.parse(texto);
-  } catch {
+  try { return JSON.parse(texto); }
+  catch {
     console.error('Respuesta no válida del servidor:', texto);
     mostrarModalError('El servidor no devolvió una respuesta válida.');
     return null;
@@ -298,7 +759,7 @@ async function _parseJSON(res) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers de modales
+// Modales
 // ---------------------------------------------------------------------------
 function mostrarCargando(mostrar) {
   const modal   = document.getElementById('statusModal');
@@ -317,34 +778,30 @@ function mostrarCargando(mostrar) {
 }
 
 function mostrarModalExito(mensaje) {
-  const modal = document.getElementById('statusModal');
+  document.getElementById('statusModal').classList.remove('hidden');
   document.getElementById('modalLoading').classList.add('hidden');
   document.getElementById('modalSuccess').classList.remove('hidden');
   document.getElementById('modalError').classList.add('hidden');
   document.getElementById('modalSuccessMessage').textContent = mensaje;
-  modal.classList.remove('hidden');
 }
 
 function mostrarModalError(mensaje) {
-  const modal = document.getElementById('statusModal');
+  document.getElementById('statusModal').classList.remove('hidden');
   document.getElementById('modalLoading').classList.add('hidden');
   document.getElementById('modalSuccess').classList.add('hidden');
   document.getElementById('modalError').classList.remove('hidden');
   document.getElementById('modalErrorMessage').textContent = mensaje;
-  modal.classList.remove('hidden');
 }
 
-function cerrarModal() {
-  document.getElementById('statusModal').classList.add('hidden');
-}
-
-function cerrarModalError() {
-  cerrarModal();
-}
+function cerrarModal()      { document.getElementById('statusModal').classList.add('hidden'); }
+function cerrarModalError() { cerrarModal(); }
 
 // ---------------------------------------------------------------------------
-// Exposición global (necesaria para los onclick inline que permanecen)
+// Exposición global
 // ---------------------------------------------------------------------------
-window.seleccionarFactura      = seleccionarFactura;
-window.aprobarFacturaActual    = aprobarFacturaActual;
-window.cerrarModalError        = cerrarModalError;
+window.seleccionarFactura    = seleccionarFactura;
+window.verAgregarProducto    = verAgregarProducto;
+window.verSelectMetodoPago   = verSelectMetodoPago;
+window.verPreviewReceipt     = verPreviewReceipt;
+window.aprobarFacturaActual  = aprobarFacturaActual;
+window.cerrarModalError      = cerrarModalError;
