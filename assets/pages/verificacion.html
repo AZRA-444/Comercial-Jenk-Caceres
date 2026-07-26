@@ -5,14 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../css/main.css" />
     <link rel="stylesheet" href="../css/verificacion.css" />
     <title>Verificación de Pagos</title>
@@ -44,28 +38,19 @@
             <h2>Pendientes</h2>
             <span class="badge-count" id="badgeCount">0</span>
           </div>
-
-          <!-- Buscador de facturas -->
           <div class="search-box">
             <i class="fas fa-search search-icon"></i>
-            <input
-              type="text"
-              id="inputBusqueda"
-              placeholder="ID o cédula..."
-              autocomplete="off"
-            />
+            <input type="text" id="inputBusqueda" placeholder="ID o cédula..." autocomplete="off" />
           </div>
-
-          <!-- Lista de tarjetas de facturas -->
           <div id="listaPendientes" class="facturas-list">
             <div class="empty-state">
-              <i class="fas fa-clock-rotate-left"></i>
+              <i class="fas fa-circle-notch fa-spin"></i>
               <p>Cargando facturas…</p>
             </div>
           </div>
         </aside>
 
-        <!-- COLUMNA DERECHA: Detalle de la factura seleccionada -->
+        <!-- COLUMNA DERECHA: Detalle -->
         <section class="ver-detail" id="seccionDetalle">
 
           <!-- Estado vacío -->
@@ -74,10 +59,10 @@
             <p>Selecciona una factura<br>para ver sus detalles</p>
           </div>
 
-          <!-- Contenido del detalle (se muestra al seleccionar) -->
+          <!-- Contenido del detalle -->
           <div id="detailContent" class="detail-content hidden">
 
-            <!-- Encabezado del detalle -->
+            <!-- Encabezado -->
             <div class="detail-header">
               <div>
                 <p class="detail-id" id="detailId">—</p>
@@ -86,7 +71,7 @@
               <span class="status-badge status-pendiente">Pendiente</span>
             </div>
 
-            <!-- Grid de info del cliente -->
+            <!-- Info del cliente -->
             <div class="info-grid">
               <div class="info-item">
                 <span class="info-label"><i class="fas fa-id-card"></i> Cédula</span>
@@ -106,7 +91,41 @@
               </div>
             </div>
 
-            <!-- Tabla de productos -->
+            <!-- ═══════════════════════════════════════════════
+                 SECCIÓN CRUD: Agregar producto a la factura
+            ════════════════════════════════════════════════ -->
+            <div class="ver-crud-section">
+              <h2 class="ver-section-title">
+                <i class="fas fa-pen-to-square"></i> Editar productos
+              </h2>
+
+              <!-- Formulario agregar producto -->
+              <div class="ver-add-form form-billing-grid">
+                <label class="form-field">
+                  Cantidad
+                  <input type="number" id="verCantProduct" placeholder="Ej: 2" min="1" />
+                </label>
+                <label class="form-field">
+                  Producto
+                  <input type="text" id="verNameProduct" placeholder="Nombre del producto" />
+                </label>
+                <label class="form-field">
+                  Precio UND ($)
+                  <input type="number" id="verPrcUndProduct" placeholder="0.00" min="0" step="0.01" />
+                </label>
+                <label class="form-field">
+                  Precio Total ($)
+                  <input type="text" id="verPrcTotalProduct" readonly placeholder="Calculado automáticamente" />
+                </label>
+                <div class="form-actions-row" style="grid-column: 1 / -1;">
+                  <button class="btn-primary" onclick="verAgregarProducto()">
+                    <i class="fas fa-plus"></i> Agregar producto
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabla de productos (editable) -->
             <div class="table-responsive">
               <table>
                 <thead>
@@ -116,11 +135,12 @@
                     <th class="text-right">UND $</th>
                     <th class="text-right">Total $</th>
                     <th class="text-right">Total Bs</th>
+                    <th class="text-center">Acc.</th>
                   </tr>
                 </thead>
                 <tbody id="tablaVerificacionProductos">
                   <tr>
-                    <td colspan="5" class="table-empty">Sin productos.</td>
+                    <td colspan="6" class="table-empty">Sin productos.</td>
                   </tr>
                 </tbody>
               </table>
@@ -132,6 +152,10 @@
                 <span>Subtotal USD</span>
                 <strong id="totSubtotalUsd">$0.00</strong>
               </div>
+              <div class="total-row">
+                <span>Descuento</span>
+                <strong id="totDescuento" style="color: #22c55e;">-$0.00</strong>
+              </div>
               <div class="total-row total-highlight">
                 <span>Total USD</span>
                 <strong id="totTotalUsd">$0.00</strong>
@@ -142,7 +166,34 @@
               </div>
             </div>
 
-            <!-- Botón de aprobación -->
+            <!-- ═══════════════════════════════════════════════
+                 SECCIÓN PAGO: Se muestra antes de aprobar
+            ════════════════════════════════════════════════ -->
+            <div class="ver-pago-section" id="verSeccionPago">
+              <h2 class="ver-section-title">
+                <i class="fas fa-money-bill-wave"></i> Confirmar pago
+              </h2>
+
+              <div class="ver-pago-form">
+                <label class="form-field">
+                  Método de pago
+                  <select id="verMetodoPago" onchange="verSelectMetodoPago(this.value)">
+                    <option value="" disabled selected>Seleccione un método</option>
+                    <option value="PM">Pago Móvil</option>
+                    <option value="PVD">Pago V/D</option>
+                    <option value="PVC">Pago V/C</option>
+                    <option value="ED">Efectivo Dólares ($)</option>
+                    <option value="EBS">Efectivo Bolívares (Bs)</option>
+                    <option value="OTROS">Otros</option>
+                  </select>
+                </label>
+
+                <!-- Detalles dinámicos según método -->
+                <div id="verPaymentDetails" class="form-billing-grid" style="margin-top: 8px;"></div>
+              </div>
+            </div>
+
+            <!-- Botón Aprobar -->
             <div class="detail-actions">
               <button class="btn-aprobar" id="btnAprobar" onclick="aprobarFacturaActual()">
                 <i class="fas fa-circle-check"></i>
@@ -150,7 +201,7 @@
               </button>
             </div>
 
-          </div>
+          </div><!-- /detailContent -->
         </section>
 
       </div>
@@ -164,9 +215,7 @@
           <p>Procesando…</p>
         </div>
         <div id="modalSuccess" class="modal-status-section hidden">
-          <div class="success-checkmark">
-            <div class="check-icon"></div>
-          </div>
+          <div class="success-checkmark"><div class="check-icon"></div></div>
           <h3>¡Aprobado!</h3>
           <p id="modalSuccessMessage">La operación se completó correctamente.</p>
         </div>
@@ -174,9 +223,7 @@
           <div class="error-icon">❌</div>
           <h3>Ocurrió un error</h3>
           <p id="modalErrorMessage">No se pudo completar la acción.</p>
-          <button type="button" onclick="cerrarModalError()" class="btn-cerrar-modal">
-            Entendido
-          </button>
+          <button type="button" onclick="cerrarModalError()" class="btn-cerrar-modal">Entendido</button>
         </div>
       </div>
     </div>
