@@ -14,108 +14,167 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/verificacion.css" />
     <title>Verificación de Pagos</title>
   </head>
 
   <body>
     <main>
-      <div class="main-card">
+      <div class="main-card ver-layout">
+
+        <!-- HEADER -->
         <header class="invoice-header">
           <div>
-            <h1>Verificación de Facturas</h1>
-            <p class="subtitle">Busca y gestiona las facturas pendientes o registradas</p>
+            <h1>Verificación de Pagos</h1>
+            <p class="subtitle">Revisa y aprueba las facturas pendientes</p>
           </div>
-          <div class="form-actions-row">
-            <a href="../../index.html" class="btn-secondary">
+          <div class="header-actions">
+            <button class="btn-secondary btn-icon" id="btnRefrescar" title="Recargar facturas">
+              <i class="fas fa-rotate-right"></i>
+            </button>
+            <a href="../../index.html" class="btn-secondary btn-back">
               <i class="fas fa-arrow-left"></i> Volver
             </a>
           </div>
         </header>
 
-        <!-- Sección de Búsqueda / Filtro -->
-        <section class="invoice-section">
-          <h2>Buscar Factura</h2>
-          <div class="form-billing-grid">
-            <label class="form-field" style="grid-column: span 3;">
-              ID de Factura o Cédula
-              <input
-                type="text"
-                id="inputBusqueda"
-                placeholder="Ingrese ID de factura o cédula del cliente..."
-              />
-            </label>
-            <div class="form-actions-row" style="align-items: flex-end;">
-              <button class="btn-primary" onclick="buscarFactura()">
-                <i class="fas fa-search"></i> Buscar
-              </button>
+        <!-- COLUMNA IZQUIERDA: Lista de pendientes -->
+        <aside class="ver-sidebar">
+          <div class="sidebar-header">
+            <h2>Pendientes</h2>
+            <span class="badge-count" id="badgeCount">0</span>
+          </div>
+
+          <!-- Buscador de facturas -->
+          <div class="search-box">
+            <i class="fas fa-search search-icon"></i>
+            <input
+              type="text"
+              id="inputBusqueda"
+              placeholder="ID o cédula..."
+              autocomplete="off"
+            />
+          </div>
+
+          <!-- Lista de tarjetas de facturas -->
+          <div id="listaPendientes" class="facturas-list">
+            <div class="empty-state">
+              <i class="fas fa-clock-rotate-left"></i>
+              <p>Cargando facturas…</p>
             </div>
           </div>
+        </aside>
+
+        <!-- COLUMNA DERECHA: Detalle de la factura seleccionada -->
+        <section class="ver-detail" id="seccionDetalle">
+
+          <!-- Estado vacío -->
+          <div class="detail-empty" id="detailEmpty">
+            <i class="fas fa-file-invoice-dollar"></i>
+            <p>Selecciona una factura<br>para ver sus detalles</p>
+          </div>
+
+          <!-- Contenido del detalle (se muestra al seleccionar) -->
+          <div id="detailContent" class="detail-content hidden">
+
+            <!-- Encabezado del detalle -->
+            <div class="detail-header">
+              <div>
+                <p class="detail-id" id="detailId">—</p>
+                <p class="detail-cliente" id="detailCliente">—</p>
+              </div>
+              <span class="status-badge status-pendiente">Pendiente</span>
+            </div>
+
+            <!-- Grid de info del cliente -->
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label"><i class="fas fa-id-card"></i> Cédula</span>
+                <span class="info-value" id="detailCedula">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label"><i class="fas fa-phone"></i> Teléfono</span>
+                <span class="info-value" id="detailTelefono">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label"><i class="fas fa-user-tie"></i> Vendedor</span>
+                <span class="info-value" id="detailVendedor">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label"><i class="fas fa-credit-card"></i> Método de pago</span>
+                <span class="info-value" id="detailMetodoPago">—</span>
+              </div>
+            </div>
+
+            <!-- Tabla de productos -->
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cant.</th>
+                    <th>Producto</th>
+                    <th class="text-right">UND $</th>
+                    <th class="text-right">Total $</th>
+                    <th class="text-right">Total Bs</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaVerificacionProductos">
+                  <tr>
+                    <td colspan="5" class="table-empty">Sin productos.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Totales -->
+            <div class="totales-box">
+              <div class="total-row">
+                <span>Subtotal USD</span>
+                <strong id="totSubtotalUsd">$0.00</strong>
+              </div>
+              <div class="total-row total-highlight">
+                <span>Total USD</span>
+                <strong id="totTotalUsd">$0.00</strong>
+              </div>
+              <div class="total-row">
+                <span>Total Bs</span>
+                <strong id="totTotalBs">Bs 0.00</strong>
+              </div>
+            </div>
+
+            <!-- Botón de aprobación -->
+            <div class="detail-actions">
+              <button class="btn-aprobar" id="btnAprobar" onclick="aprobarFacturaActual()">
+                <i class="fas fa-circle-check"></i>
+                Aprobar pago
+              </button>
+            </div>
+
+          </div>
         </section>
 
-        <!-- Sección de Resultados / Presentación Mejorada -->
-        <section id="seccionResultado" class="invoice-section">
-          <h2>Detalle de la Verificación</h2>
-          
-          <!-- Contenedor de la Tarjeta de Información del Cliente / Factura -->
-          <div id="infoFacturaContainer" class="client-summary" style="margin-bottom: 20px; display: none;">
-            <!-- Se inyectarán dinámicamente los datos generales -->
-          </div>
-
-          <!-- Tabla de Productos de la Factura -->
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Cant.</th>
-                  <th>Producto</th>
-                  <th>UND $</th>
-                  <th>Total $</th>
-                  <th>Total Bs</th>
-                </tr>
-              </thead>
-              <tbody id="tablaVerificacionProductos">
-                <tr>
-                  <td colspan="5" style="text-align: center; color: #888;">No hay factura seleccionada o cargada.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Totales y Acciones de Edición/Verificación -->
-          <div id="totalesVerificacion" class="invoice-totals"></div>
-
-          <div class="form-actions-row" style="margin-top: 20px; justify-content: flex-end;" id="accionesVerificacion">
-            <!-- Botones de acción controlados por permisos (Editar / Aprobar) -->
-          </div>
-        </section>
       </div>
     </main>
 
-    <!-- Modal de Estado / Alertas -->
+    <!-- Modal de Estado -->
     <div id="statusModal" class="modal-backdrop hidden">
       <div class="modal-card">
         <div id="modalLoading" class="modal-status-section">
           <div class="spinner"></div>
-          <p>Procesando solicitud...</p>
+          <p>Procesando…</p>
         </div>
-
         <div id="modalSuccess" class="modal-status-section hidden">
           <div class="success-checkmark">
             <div class="check-icon"></div>
           </div>
-          <h3>¡Éxito!</h3>
+          <h3>¡Aprobado!</h3>
           <p id="modalSuccessMessage">La operación se completó correctamente.</p>
         </div>
-
         <div id="modalError" class="modal-status-section hidden">
           <div class="error-icon">❌</div>
           <h3>Ocurrió un error</h3>
           <p id="modalErrorMessage">No se pudo completar la acción.</p>
-          <button
-            type="button"
-            onclick="cerrarModalError()"
-            class="btn-cerrar-modal"
-          >
+          <button type="button" onclick="cerrarModalError()" class="btn-cerrar-modal">
             Entendido
           </button>
         </div>
