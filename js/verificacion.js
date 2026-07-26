@@ -225,6 +225,9 @@ async function aprobarFacturaActual() {
         limpiarDetalle();
         cargarFacturasPendientes();
       }, 1600);
+      setTimeout(() => {
+      window.location.reload();
+      }, 1800);
     } else {
       mostrarModalError(json.message || 'No se pudo aprobar la factura.');
       document.getElementById('btnAprobar').disabled = false;
