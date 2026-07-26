@@ -27,10 +27,20 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0;
+  min-width:0;
+  flex-wrap:nowrap;
+}
+
+.ver-layout .invoice-header > div:first-child{
+    flex:1;
+    min-width:0;
 }
 
 .ver-layout .invoice-header h1 {
   font-size: clamp(1.1rem, 1rem + 1vw, 1.5rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ver-layout .invoice-header .subtitle {
@@ -40,10 +50,13 @@
 }
 
 .header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+
+    flex-shrink:0;
+    flex-wrap:nowrap;
+    white-space:nowrap;
 }
 
 .btn-back {
@@ -59,6 +72,18 @@
   padding: 0;
   font-size: .9rem;
   border-radius: 10px;
+}
+
+.table-responsive{
+    width:100%;
+    min-width:0;
+    overflow-x:auto;
+}
+
+.table-responsive table{
+    width:100%;
+    min-width:700px;
+    border-collapse:collapse;
 }
 
 /* ====================================================================
@@ -210,6 +235,14 @@
   padding: clamp(16px, 2.5vw, 28px);
   display: flex;
   flex-direction: column;
+
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.detail-content{
+    min-width:0;
+    width:100%;
 }
 
 /* Placeholder cuando no hay selección */
@@ -509,7 +542,7 @@
    ==================================================================== */
 @media (min-width: 768px) {
   .ver-layout {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 300px minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
       "header  header"
@@ -534,7 +567,7 @@
 
 @media (min-width: 1024px) {
   .ver-layout {
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 320px minmax(0, 1fr);
   }
 
   .info-grid {
