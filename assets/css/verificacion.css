@@ -84,6 +84,7 @@
     width:100%;
     min-width:700px;
     border-collapse:collapse;
+    table-layout: fixed;
 }
 
 /* ====================================================================
@@ -663,12 +664,24 @@
   transform: scale(1.15);
 }
 
-/* Alineación de columnas de la tabla de verificación (6 columnas) */
-#tablaVerificacionProductos td:nth-child(6),
-.ver-detail table th:nth-child(6) {
-  text-align: center;
-  width: 72px;
-}
+/* Anchos de columna de la tabla de verificación — idénticos a facturacion.css */
+.ver-detail table th:nth-child(1),
+.ver-detail table td:nth-child(1) { width: 65px; }
+
+.ver-detail table th:nth-child(2),
+.ver-detail table td:nth-child(2) { width: 230px; }
+
+.ver-detail table th:nth-child(3),
+.ver-detail table td:nth-child(3),
+.ver-detail table th:nth-child(4),
+.ver-detail table td:nth-child(4),
+.ver-detail table th:nth-child(5),
+.ver-detail table td:nth-child(5),
+.ver-detail table th:nth-child(6),
+.ver-detail table td:nth-child(6) { width: 95px; text-align: right; }
+
+.ver-detail table th:nth-child(7),
+.ver-detail table td:nth-child(7) { width: 65px; text-align: center; }
 
 .text-center { text-align: center; }
 
