@@ -229,26 +229,28 @@ function verActualizarTabla() {
   const tasa  = verState.tasaCambio;
 
   if (!verState.productos || verState.productos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="table-empty">Sin productos. Agrega uno arriba.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">Sin productos. Agrega uno arriba.</td></tr>`;
     _actualizarTotalesUI(0, 0, 0, 0);
     return;
   }
 
   tbody.innerHTML = verState.productos.map((p, i) => {
-    const excluido = !!p.excluidoDescuento;
-    const totalBS  = (p.precioTotal * tasa).toFixed(2);
+    const excluido      = !!p.excluidoDescuento;
+    const precioUndBS   = (p.precioUnitario * tasa).toFixed(2);
+    const precioTotalBS = (p.precioTotal    * tasa).toFixed(2);
     return `
       <tr>
         <td>${p.cantidad}</td>
         <td>${escapeHtml(p.nombre)}</td>
-        <td class="text-right">$${p.precioUnitario.toFixed(2)}</td>
-        <td class="text-right">$${p.precioTotal.toFixed(2)}</td>
-        <td class="text-right">Bs ${totalBS}</td>
-        <td class="text-center acciones-producto">
+        <td>$${p.precioUnitario.toFixed(2)}</td>
+        <td>${precioUndBS}Bs</td>
+        <td>$${p.precioTotal.toFixed(2)}</td>
+        <td>${precioTotalBS}Bs</td>
+        <td class="acciones-producto">
           <button
             class="btn-toggle-desc${excluido ? ' active' : ''}"
             data-index="${i}"
-            title="${excluido ? 'Volver a incluir en el descuento' : 'Sacar del descuento'}"
+            title="${excluido ? 'Volver a incluir en el descuento' : 'Sacar del descuento (se suma completo al total)'}"
           >
             <i class="fa-solid ${excluido ? 'fa-rotate-left' : 'fa-tag'}"></i>
           </button>
