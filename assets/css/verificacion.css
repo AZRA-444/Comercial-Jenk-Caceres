@@ -574,3 +574,195 @@
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* ====================================================================
+   CRUD DE PRODUCTOS — Sección editar
+   ==================================================================== */
+.ver-crud-section,
+.ver-pago-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.ver-section-title {
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ver-section-title i {
+  color: var(--accent);
+  font-size: .85rem;
+}
+
+/* Formulario agregar producto dentro de verificación */
+.ver-add-form {
+  background: rgba(255,255,255,.025);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* Acciones de tabla (toggle + eliminar) */
+.acciones-producto {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-toggle-desc {
+  padding: 5px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s ease, color .15s ease;
+  font-size: .8rem;
+}
+
+.btn-toggle-desc:hover,
+.btn-toggle-desc.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Sobrescribir btn-eliminar para que funcione dentro del ver-detail */
+.ver-detail .btn-eliminar {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 1rem;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color .2s ease, transform .2s ease;
+  padding: 0;
+}
+
+.ver-detail .btn-eliminar:hover {
+  color: var(--danger-hover);
+  transform: scale(1.15);
+}
+
+/* Alineación de columnas de la tabla de verificación (6 columnas) */
+#tablaVerificacionProductos td:nth-child(6),
+.ver-detail table th:nth-child(6) {
+  text-align: center;
+  width: 72px;
+}
+
+.text-center { text-align: center; }
+
+/* ====================================================================
+   MÓDULO DE PAGO en verificación
+   ==================================================================== */
+.ver-pago-section {
+  margin-bottom: 6px;
+}
+
+.ver-pago-form {
+  background: rgba(255,255,255,.025);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Grilla interna del pago (hereda form-billing-grid de facturacion.css) */
+#verPaymentDetails {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 600px) {
+  #verPaymentDetails {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Reutilizar estilos de captura de comprobante de facturacion.css */
+.capture-label {
+  font-size: .82rem;
+  color: var(--text-secondary);
+}
+
+.btn-capture {
+  width: auto;
+  min-height: 40px;
+  font-size: .85rem;
+  padding: 0 18px;
+  align-self: flex-start;
+}
+
+.receipt-preview-box {
+  width: 100%;
+  min-height: 140px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,.2);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: rgba(255,255,255,.03);
+  margin-top: 4px;
+}
+
+/* textarea dentro del pago */
+.ver-pago-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  background: rgba(255,255,255,.05);
+  color: var(--text);
+  font-size: .88rem;
+  font-family: 'Poppins', sans-serif;
+  resize: vertical;
+  transition: outline .2s ease, background .2s ease;
+  min-height: 72px;
+}
+
+.ver-pago-form textarea:focus {
+  outline: 2px solid var(--accent);
+  background: rgba(255,255,255,.08);
+}
+
+.ver-pago-form textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: .6;
+}
+
+/* Formulario de agregar producto: grid responsive */
+@media (min-width: 600px) {
+  .ver-add-form.form-billing-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .ver-add-form.form-billing-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
