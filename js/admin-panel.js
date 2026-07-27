@@ -164,6 +164,7 @@ function renderVentas(facturas) {
   // Acumuladores reales para pasar a los KPIs
   let totalUSDReal = 0;
   let totalBsReal = 0;
+  let totalDescuentoReal = 0;
 
   if (!facturas.length) {
     if (empty) empty.style.display = "block";
@@ -185,6 +186,7 @@ function renderVentas(facturas) {
       // Acumular totales exactos
       totalUSDReal += totalUSD;
       totalBsReal += totalBs;
+      totalDescuentoReal += descuentoUSD;
 
       const tr = document.createElement("tr");
 
@@ -212,14 +214,14 @@ function renderVentas(facturas) {
   window.__facturasActuales = facturas;
 
   // Renderizar KPIs pasando tanto la lista como las sumas reales calculadas
-  renderKPIs(facturas, totalUSDReal, totalBsReal);
+  renderKPIs(facturas, totalUSDReal, totalBsReal, totalDescuentoReal);
   renderCharts(facturas);
 }
 
 // ============================================================
 // FUNCTION RENDER KPIS (Ajustada para montos reales)
 // ============================================================
-function renderKPIs(facturas, totalUSDReal = 0, totalBsReal = 0) {
+function renderKPIs(facturas, totalUSDReal = 0, totalBsReal = 0, totalDescuentoReal = 0) {
   // Si no se pasaron las sumas precalculadas, las calcula en el momento
   if (arguments.length === 1 && facturas.length > 0) {
     totalUSDReal = facturas.reduce((acc, f) => acc + (Number(f.total_usd) || 0), 0);
@@ -229,20 +231,27 @@ function renderKPIs(facturas, totalUSDReal = 0, totalBsReal = 0) {
       const tasa = Number(f.tasa_cambio) || (typeof TASA_BCV_ACTUAL !== "undefined" ? TASA_BCV_ACTUAL : 1);
       return acc + ((Number(f.total_usd) || 0) * tasa);
     }, 0);
+    totalDescuentoReal = facturas.reduce((acc, f) => acc + (Number(f.descuento_usd) || 0), 0);
   }
 
-  const kpiTotalUSD = document.getElementById("kpi-total-usd");
-  const kpiTotalBS = document.getElementById("kpi-total-bs");
-  const kpiCantVentas = document.getElementById("kpi-cant-ventas");
-  const kpiPromedio = document.getElementById("kpi-promedio-ticket");
+  // Estos son los IDs reales definidos en administrador.html
+  // (antes el código buscaba "kpi-total-usd", "kpi-total-bs", "kpi-cant-ventas"
+  // y "kpi-promedio-ticket", que no existen en el HTML, por lo que las tarjetas
+  // de KPIs de ventas nunca se actualizaban).
+  const kpiTotalUSD = document.getElementById("kpi-usd");
+  const kpiTotalBS = document.getElementById("kpi-bs");
+  const kpiCantVentas = document.getElementById("kpi-count");
+  const kpiPromedio = document.getElementById("kpi-avg");
+  const kpiDescuento = document.getElementById("kpi-desc");
 
   const totalVentas = facturas.length;
   const ticketPromedioUSD = totalVentas > 0 ? (totalUSDReal / totalVentas) : 0;
 
   if (kpiTotalUSD) kpiTotalUSD.textContent = fmtUSD(totalUSDReal);
-  if (kpiTotalBS) kpiTotalBS.textContent = `Bs. ${fmtBS(totalBsReal)}`;
+  if (kpiTotalBS) kpiTotalBS.textContent = fmtBS(totalBsReal);
   if (kpiCantVentas) kpiCantVentas.textContent = totalVentas;
   if (kpiPromedio) kpiPromedio.textContent = fmtUSD(ticketPromedioUSD);
+  if (kpiDescuento) kpiDescuento.textContent = fmtUSD(totalDescuentoReal);
 }
 // ============================================================
 // DIAGNÓSTICO EN CONSOLA PARA LAS GRÁFICAS

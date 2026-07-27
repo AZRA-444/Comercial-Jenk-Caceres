@@ -1,15 +1,3 @@
-/**
- * verificacion.js
- * Módulo de verificación de pagos.
- *
- * Flujo:
- *  1. Carga → cargarFacturasPendientes()
- *  2. Click en tarjeta → seleccionarFactura(index)
- *  3. CRUD de productos: agregar / eliminar / toggle descuento
- *  4. Formulario de pago → verSelectMetodoPago()
- *  5. Botón "Aprobar" → aprobarFacturaActual()
- */
-
 // ---------------------------------------------------------------------------
 // Estado del módulo
 // ---------------------------------------------------------------------------
@@ -744,17 +732,17 @@ function _actualizarTotalesUI(subTotalUSD = 0, descuentoUSD = 0, totalUSD = 0, t
   const totUSD = Number(totalUSD) || 0;
   const totBS = Number(totalBS) || 0;
 
-  // Selección de elementos del DOM (ajusta los IDs si en tu HTML se llaman distinto)
-  const elSubtotal  = document.getElementById("v-subtotal-usd") || document.getElementById("subtotal-usd");
-  const elDescuento = document.getElementById("v-descuento-usd") || document.getElementById("descuento-usd");
-  const elTotalUSD  = document.getElementById("v-total-usd")     || document.getElementById("total-usd");
-  const elTotalBS   = document.getElementById("v-total-bs")      || document.getElementById("total-bs");
+  // Selección de elementos del DOM (IDs reales usados en verificacion.html)
+  const elSubtotal  = document.getElementById("totSubtotalUsd");
+  const elDescuento = document.getElementById("totDescuento");
+  const elTotalUSD  = document.getElementById("totTotalUsd");
+  const elTotalBS   = document.getElementById("totTotalBs");
 
   // Formateo y renderizado
   if (elSubtotal)  elSubtotal.textContent  = typeof fmtUSD === "function" ? fmtUSD(subUSD)  : `$${subUSD.toFixed(2)}`;
-  if (elDescuento) elDescuento.textContent = typeof fmtUSD === "function" ? fmtUSD(descUSD) : `$${descUSD.toFixed(2)}`;
+  if (elDescuento) elDescuento.textContent = (typeof fmtUSD === "function" ? `-${fmtUSD(descUSD)}` : `-$${descUSD.toFixed(2)}`);
   if (elTotalUSD)  elTotalUSD.textContent  = typeof fmtUSD === "function" ? fmtUSD(totUSD)  : `$${totUSD.toFixed(2)}`;
-  if (elTotalBS)   elTotalBS.textContent   = typeof fmtBS === "function"  ? `Bs. ${fmtBS(totBS)}` : `Bs. ${totBS.toFixed(2)}`;
+  if (elTotalBS)   elTotalBS.textContent   = typeof fmtBS === "function"  ? `Bs ${fmtBS(totBS)}` : `Bs ${totBS.toFixed(2)}`;
 }
 
 function _limpiarFormAgregar() {
