@@ -737,6 +737,26 @@ function limpiarDetalle() {
   document.querySelectorAll('.factura-card').forEach(el => el.classList.remove('activa'));
 }
 
+function _actualizarTotalesUI(subTotalUSD = 0, descuentoUSD = 0, totalUSD = 0, totalBS = 0) {
+  // Conversión segura a número
+  const subUSD = Number(subTotalUSD) || 0;
+  const descUSD = Number(descuentoUSD) || 0;
+  const totUSD = Number(totalUSD) || 0;
+  const totBS = Number(totalBS) || 0;
+
+  // Selección de elementos del DOM (ajusta los IDs si en tu HTML se llaman distinto)
+  const elSubtotal  = document.getElementById("v-subtotal-usd") || document.getElementById("subtotal-usd");
+  const elDescuento = document.getElementById("v-descuento-usd") || document.getElementById("descuento-usd");
+  const elTotalUSD  = document.getElementById("v-total-usd")     || document.getElementById("total-usd");
+  const elTotalBS   = document.getElementById("v-total-bs")      || document.getElementById("total-bs");
+
+  // Formateo y renderizado
+  if (elSubtotal)  elSubtotal.textContent  = typeof fmtUSD === "function" ? fmtUSD(subUSD)  : `$${subUSD.toFixed(2)}`;
+  if (elDescuento) elDescuento.textContent = typeof fmtUSD === "function" ? fmtUSD(descUSD) : `$${descUSD.toFixed(2)}`;
+  if (elTotalUSD)  elTotalUSD.textContent  = typeof fmtUSD === "function" ? fmtUSD(totUSD)  : `$${totUSD.toFixed(2)}`;
+  if (elTotalBS)   elTotalBS.textContent   = typeof fmtBS === "function"  ? `Bs. ${fmtBS(totBS)}` : `Bs. ${totBS.toFixed(2)}`;
+}
+
 function _limpiarFormAgregar() {
   ['verCantProduct', 'verNameProduct', 'verPrcUndProduct', 'verPrcTotalProduct']
     .forEach(id => {
