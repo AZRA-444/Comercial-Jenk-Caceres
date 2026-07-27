@@ -1,11 +1,49 @@
 from http.server import BaseHTTPRequestHandler
+import base64
 import json
 import os
+import re
+import time
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
-# Configuración básica
-MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB
+# Configuración básica.
+# NOTA: cuando se aprueba una factura, este mismo endpoint recibe también el
+# comprobante de pago en base64 (hasta 5MB en binario, ~33% más en base64),
+# así que el límite ya no puede quedarse en 512 KB como en el resto de
+# ediciones simples de campos.
+MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB (ediciones normales de campos)
+
+BUCKET_COMPROBANTES = "comprobantes"
+EXTENSIONES_PERMITIDAS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+}
+MAX_BYTES_COMPROBANTE = 5 * 1024 * 1024  # 5MB
+
+# Límite del cuerpo completo de la solicitud cuando se aprueba una factura
+# (JSON + comprobante en base64 + productos editados).
+MAX_BYTES_SOLICITUD_APROBACION = int(MAX_BYTES_COMPROBANTE * 1.5) + (256 * 1024)
+
+# Métodos de pago que el sistema realmente sabe procesar; igual que en
+# guardar-factura.py, cualquier otro valor se rechaza en vez de guardarse
+# "tal cual" en la tabla definitiva.
+METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
+
+# Métodos de pago que exigen comprobante adjunto para poder aprobarse.
+METODOS_QUE_REQUIEREN_COMPROBANTE = {"PM", "OTROS"}
+
+MAX_PRODUCTOS_POR_FACTURA = 300
+LONGITUD_MAXIMA_NOMBRE_PRODUCTO = 120
+LONGITUDES_MAXIMAS = {
+    "referencia": 40,
+    "banco": 40,
+    "observaciones": 500,
+}
+
+ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
 
 URL_SUPABASE = os.environ.get("SUPABASE_URL", "")
 KEY_SUPABASE = os.environ.get("SUPABASE_SECRET_KEY", "")
@@ -19,6 +57,88 @@ retries = Retry(
     allowed_methods=["GET", "POST", "PATCH"],
 )
 session.mount("https://", HTTPAdapter(max_retries=retries))
+
+
+def _validar_productos_editados(productos):
+    """Valida la lista de productos editados que llega al aprobar una factura.
+    Devuelve un mensaje de error (str) o None si todo está bien."""
+    if not isinstance(productos, list) or not productos:
+        return "La factura no puede aprobarse sin productos"
+    if len(productos) > MAX_PRODUCTOS_POR_FACTURA:
+        return f"La factura no puede tener más de {MAX_PRODUCTOS_POR_FACTURA} productos"
+
+    for i, p in enumerate(productos):
+        if not isinstance(p, dict):
+            return f"Producto #{i+1}: formato inválido"
+
+        nombre = p.get("nombre") or p.get("nombre_producto")
+        cantidad = p.get("cantidad")
+        precio_unitario = p.get("precioUnitario") if p.get("precioUnitario") is not None else p.get("precio_unitario")
+        precio_total = p.get("precioTotal") if p.get("precioTotal") is not None else p.get("precio_total")
+
+        if not nombre:
+            return f"Producto #{i+1}: falta el nombre"
+        if len(str(nombre)) > LONGITUD_MAXIMA_NOMBRE_PRODUCTO:
+            return f"Producto #{i+1}: el nombre supera los {LONGITUD_MAXIMA_NOMBRE_PRODUCTO} caracteres permitidos"
+
+        try:
+            if float(cantidad) <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return f"Producto #{i+1} ({nombre}): cantidad inválida"
+
+        try:
+            if float(precio_unitario) < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return f"Producto #{i+1} ({nombre}): precio unitario inválido"
+
+        try:
+            if float(precio_total) < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return f"Producto #{i+1} ({nombre}): precio total inválido"
+
+    return None
+
+
+def _subir_comprobante(comprobante_base64, comprobante_tipo, id_factura):
+    """Decodifica el base64 recibido y lo sube a Supabase Storage.
+    Devuelve (path, None) si todo sale bien, o (None, mensaje_error) si falla.
+    (Misma lógica que guardar-factura.py, para que un comprobante subido al
+    aprobar una factura se comporte igual que uno subido al crearla.)"""
+
+    extension = EXTENSIONES_PERMITIDAS.get(comprobante_tipo)
+    if not extension:
+        return None, f"Tipo de imagen no soportado: {comprobante_tipo}"
+
+    try:
+        binario = base64.b64decode(comprobante_base64, validate=True)
+    except Exception:
+        return None, "El comprobante no es un base64 válido"
+
+    if len(binario) > MAX_BYTES_COMPROBANTE:
+        return None, "El comprobante supera el tamaño máximo permitido (5MB)"
+
+    path = f"{id_factura}-{int(time.time())}.{extension}"
+    url_subida = f"{URL_SUPABASE}/storage/v1/object/{BUCKET_COMPROBANTES}/{path}"
+
+    headers = {
+        "apikey": KEY_SUPABASE,
+        "Authorization": f"Bearer {KEY_SUPABASE}",
+        "Content-Type": comprobante_tipo,
+        "x-upsert": "false",
+    }
+
+    try:
+        res = session.post(url_subida, headers=headers, data=binario, timeout=15)
+    except requests.exceptions.RequestException as e:
+        return None, f"No se pudo conectar con Supabase Storage: {e}"
+
+    if res.status_code not in (200, 201):
+        return None, f"No se pudo subir el comprobante: {res.text}"
+
+    return path, None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -73,7 +193,10 @@ class handler(BaseHTTPRequestHandler):
     def _editar_temporal(self):
         try:
             content_length = int(self.headers.get('Content-Length', 0))
-            if content_length <= 0 or content_length > MAX_BYTES_SOLICITUD:
+            # No sabemos todavía si esta petición es una aprobación (que puede
+            # incluir el comprobante en base64) o una simple edición de campos,
+            # así que se valida contra el límite más amplio de los dos.
+            if content_length <= 0 or content_length > MAX_BYTES_SOLICITUD_APROBACION:
                 self._responder(400, {"status": "error", "message": "Cuerpo de solicitud inválido o muy grande"})
                 return
 
@@ -91,6 +214,10 @@ class handler(BaseHTTPRequestHandler):
         nuevo_estado = body_data.get("estado")
 
         # CASO ESPECIAL: Si se está aprobando, migramos a las tablas definitivas
+        # aplicando lo que el verificador haya editado en el formulario de
+        # aprobación (productos, totales recalculados, método de pago y
+        # comprobante). Estos datos NO viven en facturas_temporales: llegan
+        # únicamente en el body de esta misma petición (ver verificacion.js).
         if nuevo_estado == "aprobado":
             headers_supabase = {
                 "apikey": KEY_SUPABASE,
@@ -98,45 +225,131 @@ class handler(BaseHTTPRequestHandler):
                 "Content-Type": "application/json",
             }
 
+            if not ID_FACTURA_REGEX.match(str(id_factura)):
+                self._responder(400, {"status": "error", "message": "id_factura tiene un formato inválido"})
+                return
+
             try:
-                # 1. Consultar la factura temporal completa con sus detalles
-                url_get_temp = f"{URL_SUPABASE}/rest/v1/facturas_temporales?id_factura=eq.{id_factura}&select=*,detalles_factura_temporal(*)"
+                # 1. Consultar la factura temporal SOLO para los datos del cliente
+                #    que el formulario de aprobación no permite editar (nombre,
+                #    apellido, cédula, teléfono, vendedor, tasa de cambio).
+                url_get_temp = f"{URL_SUPABASE}/rest/v1/facturas_temporales?id_factura=eq.{id_factura}&select=*"
                 res_temp = session.get(url_get_temp, headers=headers_supabase, timeout=10)
-                
+
                 if res_temp.status_code != 200 or not res_temp.json():
                     self._responder(404, {"status": "error", "message": "No se encontró la factura temporal a aprobar"})
                     return
 
                 factura_temp = res_temp.json()[0]
-                detalles = factura_temp.pop("detalles_factura_temporal", [])
 
-                # Limpieza exhaustiva de todos los campos exclusivos de la tabla temporal que no van en la definitiva
-                for campo in ["creado_en", "created_at", "estado", "fecha_expiracion"]:
-                    factura_temp.pop(campo, None)
-
-                # 2. Insertar en la tabla definitiva 'facturas'
-                url_insert_factura = f"{URL_SUPABASE}/rest/v1/facturas"
-                res_ins_fac = session.post(url_insert_factura, json=factura_temp, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
-                
-                if res_ins_fac.status_code not in (200, 201, 204):
-                    self._responder(502, {"status": "error", "message": f"Error al migrar a la tabla facturas: {res_ins_fac.text}"})
+                # 2. Validar los productos editados (llegan en el body, no en la
+                #    tabla temporal: son la copia editable que el verificador
+                #    pudo modificar en pantalla).
+                productos = body_data.get("productos")
+                error_productos = _validar_productos_editados(productos)
+                if error_productos:
+                    self._responder(400, {"status": "error", "message": error_productos})
                     return
 
-                # 3. Insertar los detalles en la tabla definitiva 'factura_detalles' (si existen)
-                if detalles:
-                    for det in detalles:
-                        det.pop("id", None)
-                        for campo in ["creado_en", "created_at", "fecha_expiracion"]:
-                            det.pop(campo, None)
-                        
-                    url_insert_detalles = f"{URL_SUPABASE}/rest/v1/factura_detalles"
-                    res_ins_det = session.post(url_insert_detalles, json=detalles, headers={**headers_supabase, "Prefer": "return=minimal"}, timeout=10)
-                    
-                    if res_ins_det.status_code not in (200, 201, 204):
-                        self._responder(502, {"status": "error", "message": f"Error al migrar los detalles: {res_ins_det.text}"})
+                # 3. Validar el método de pago elegido en el formulario de aprobación
+                metodo_pago = body_data.get("metodo_pago")
+                if metodo_pago not in METODOS_PAGO_VALIDOS:
+                    self._responder(400, {"status": "error", "message": f"Método de pago no reconocido: {metodo_pago}"})
+                    return
+
+                for campo, longitud in LONGITUDES_MAXIMAS.items():
+                    valor = body_data.get(campo)
+                    if valor is not None and len(str(valor)) > longitud:
+                        self._responder(400, {"status": "error", "message": f"El campo {campo} supera la longitud máxima permitida ({longitud} caracteres)"})
                         return
 
-                # 4. Eliminar el registro de las tablas temporales
+                # 4. Validar los totales recalculados que envía el verificador
+                try:
+                    subtotal_usd = float(body_data.get("subtotal_usd"))
+                    descuento_usd = float(body_data.get("descuento_usd", 0))
+                    total_usd = float(body_data.get("total_usd"))
+                    total_bs = float(body_data.get("total_bs"))
+                except (TypeError, ValueError):
+                    self._responder(400, {"status": "error", "message": "Los totales recalculados deben ser numéricos"})
+                    return
+
+                # 5. Subir el comprobante de pago si el verificador adjuntó uno
+                comprobante_path = None
+                comprobante_base64 = body_data.get("comprobante_base64")
+                comprobante_tipo = body_data.get("comprobante_tipo")
+
+                if comprobante_base64 and comprobante_tipo:
+                    comprobante_path, error_comprobante = _subir_comprobante(
+                        comprobante_base64, comprobante_tipo, id_factura
+                    )
+                    if error_comprobante:
+                        self._responder(400, {"status": "error", "message": error_comprobante})
+                        return
+                elif metodo_pago in METODOS_QUE_REQUIEREN_COMPROBANTE:
+                    self._responder(400, {"status": "error", "message": f"El método de pago {metodo_pago} requiere un comprobante de pago"})
+                    return
+
+                # 6. La tasa de cambio solo vive en la factura temporal (nunca se
+                #    reenvía en el payload de aprobación), así que subtotal_bs y
+                #    descuento_bs se derivan de ella. Si por algún motivo no está
+                #    disponible, se calcula a partir de total_bs/total_usd.
+                tasa_cambio = factura_temp.get("tasa_cambio")
+                if not tasa_cambio:
+                    tasa_cambio = (total_bs / total_usd) if total_usd > 0 else 1
+                tasa_cambio = float(tasa_cambio)
+
+                subtotal_bs = round(subtotal_usd * tasa_cambio, 2)
+                descuento_bs = round(descuento_usd * tasa_cambio, 2)
+
+                # 7. Armar la factura definitiva combinando lo fijo (datos del
+                #    cliente, tomados de la temporal) con lo editado en el
+                #    formulario de aprobación (productos, totales, pago, comprobante).
+                p_factura = {
+                    "id_factura": id_factura,
+                    "nombre": factura_temp.get("nombre"),
+                    "apellido": factura_temp.get("apellido", ""),
+                    "cedula": factura_temp.get("cedula", ""),
+                    "telefono": factura_temp.get("telefono"),
+                    "vendedor": factura_temp.get("vendedor", "Cajero General"),
+                    "subtotal_usd": subtotal_usd,
+                    "descuento_usd": descuento_usd,
+                    "total_usd": total_usd,
+                    "subtotal_bs": subtotal_bs,
+                    "descuento_bs": descuento_bs,
+                    "total_bs": total_bs,
+                    "metodo_pago": metodo_pago,
+                    "referencia": body_data.get("referencia", "N/A"),
+                    "banco": body_data.get("banco", "N/A"),
+                    "observaciones": body_data.get("observaciones", ""),
+                    "comprobante_path": comprobante_path,
+                }
+
+                p_detalles = [
+                    {
+                        "nombre_producto": p.get("nombre") or p.get("nombre_producto"),
+                        "cantidad": p.get("cantidad"),
+                        "precio_unitario": p.get("precioUnitario") if p.get("precioUnitario") is not None else p.get("precio_unitario"),
+                        "precio_total": p.get("precioTotal") if p.get("precioTotal") is not None else p.get("precio_total"),
+                    }
+                    for p in productos
+                ]
+
+                # 8. Insertar cabecera + detalles atómicamente vía la misma RPC
+                #    que usa guardar-factura.py, para no dejar nunca una factura
+                #    a medio migrar si algo falla a mitad de camino.
+                url_rpc = f"{URL_SUPABASE}/rest/v1/rpc/guardar_factura_completa"
+                res_rpc = session.post(
+                    url_rpc,
+                    json={"p_factura": p_factura, "p_detalles": p_detalles},
+                    headers=headers_supabase,
+                    timeout=15,
+                )
+
+                if res_rpc.status_code not in (200, 204):
+                    self._responder(502, {"status": "error", "message": f"No se pudo migrar la factura a las tablas definitivas: {res_rpc.text}"})
+                    return
+
+                # 9. Solo si la migración fue exitosa se elimina el registro temporal
                 url_del_detalles = f"{URL_SUPABASE}/rest/v1/detalles_factura_temporal?id_factura=eq.{id_factura}"
                 session.delete(url_del_detalles, headers=headers_supabase, timeout=10)
 
