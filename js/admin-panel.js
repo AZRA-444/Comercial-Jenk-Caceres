@@ -397,6 +397,7 @@ async function verDetalle(idFactura) {
       <div class="row"><span>Método de pago</span><span>${escapeHtml(factura?.metodo_pago)}</span></div>
       <div class="row"><span>Referencia</span><span>${escapeHtml(factura?.referencia)}</span></div>
       <div class="row"><span>Banco</span><span>${escapeHtml(factura?.banco)}</span></div>
+      <div class="row"><span>Observaciones</span><span>${escapeHtml(factura?.observaciones) || 'N/A'}</span></div>
       <h4 style="margin:14px 0 6px; font-family:var(--serif);">Productos</h4>
       ${productosHtml}
       <div class="row" style="border-top:2px solid var(--ink); margin-top:8px; font-weight:700;">
