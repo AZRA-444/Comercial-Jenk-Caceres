@@ -17,30 +17,12 @@ EXTENSIONES_PERMITIDAS = {
 }
 MAX_BYTES_COMPROBANTE = 5 * 1024 * 1024  # 5MB
 
-# Tamaño máximo aceptado para el cuerpo completo de la solicitud (JSON +
-# comprobante en base64). El base64 pesa ~33% más que el binario original,
-# así que se deja margen sobre MAX_BYTES_COMPROBANTE. Sin este límite, un
-# Content-Length arbitrariamente grande se leía entero en memoria antes de
-# validar nada.
 MAX_BYTES_SOLICITUD = int(MAX_BYTES_COMPROBANTE * 1.5) + (256 * 1024)
-
-# Máximo de productos por factura, para evitar payloads abusivos que
-# intenten sobrecargar la base de datos o la respuesta del panel.
 MAX_PRODUCTOS_POR_FACTURA = 300
-
-# Métodos de pago que el sistema realmente sabe procesar; cualquier otro
-# valor se rechaza en vez de guardarse "tal cual" en la base de datos.
 METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
 
-# Un id_factura solo debe tener letras, números y guiones: se usa para
-# construir la ruta del comprobante en Supabase Storage y para filtrar
-# consultas, así que no debe poder contener "/", espacios u otros
-# caracteres que alteren esa ruta o esas consultas.
 ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
 
-# Límites de longitud para campos de texto libre: ninguno de estos datos
-# necesita ser arbitrariamente largo, y limitarlos evita abusos y facturas
-# ilegibles en el panel de administración.
 LONGITUDES_MAXIMAS = {
     "nombre": 80,
     "apellido": 80,
@@ -57,8 +39,6 @@ URL_SUPABASE = os.environ.get("SUPABASE_URL", "")
 KEY_SUPABASE = os.environ.get("SUPABASE_SECRET_KEY", "")
 FRONTEND_DOMAIN = os.environ.get("FRONTEND_DOMAIN", "https://sistema-de-facturacion-cjc.vercel.app")
 
-# Sesión con reintentos automáticos para fallos transitorios de red
-# (timeouts cortos, 502/503/504 puntuales, etc.)
 session = requests.Session()
 retries = Retry(
     total=3,
@@ -70,9 +50,7 @@ session.mount("https://", HTTPAdapter(max_retries=retries))
 
 
 def subir_comprobante(comprobante_base64, comprobante_tipo, id_factura):
-    """Decodifica el base64 recibido y lo sube a Supabase Storage.
-    Devuelve (path, None) si todo sale bien, o (None, mensaje_error) si falla."""
-
+    """Decodifica el base64 recibido y lo sube a Supabase Storage."""
     extension = EXTENSIONES_PERMITIDAS.get(comprobante_tipo)
     if not extension:
         return None, f"Tipo de imagen no soportado: {comprobante_tipo}"
@@ -107,8 +85,7 @@ def subir_comprobante(comprobante_base64, comprobante_tipo, id_factura):
 
 
 def validar_factura(data):
-    """Valida los datos mínimos antes de tocar la base de datos.
-    Devuelve un mensaje de error (str) o None si todo está bien."""
+    """Valida los datos mínimos antes de tocar la base de datos."""
     if not isinstance(data, dict):
         return "El cuerpo de la solicitud debe ser un objeto JSON"
 
@@ -150,10 +127,6 @@ def validar_factura(data):
         if len(str(nombre)) > LONGITUD_MAXIMA_NOMBRE_PRODUCTO:
             return f"Producto #{i+1}: el nombre supera los {LONGITUD_MAXIMA_NOMBRE_PRODUCTO} caracteres permitidos"
 
-        # Todas las conversiones numéricas se hacen con try/except: antes,
-        # un valor no numérico (por ejemplo un texto) hacía que float()
-        # lanzara una excepción sin capturar y el servidor respondiera con
-        # un error 500 en lugar de un mensaje claro de validación.
         try:
             cantidad_num = float(cantidad)
         except (TypeError, ValueError):
@@ -183,6 +156,15 @@ def validar_factura(data):
             float(valor)
         except (TypeError, ValueError):
             return f"El campo {campo} debe ser numérico"
+
+    # Validar tasa_cambio si viene en la solicitud
+    tasa = data.get("tasa_cambio")
+    if tasa is not None:
+        try:
+            if float(tasa) <= 0:
+                return "La tasa de cambio debe ser mayor a cero"
+        except (TypeError, ValueError):
+            return "La tasa de cambio debe ser un número válido"
 
     return None
 
@@ -215,7 +197,6 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if content_length > MAX_BYTES_SOLICITUD:
-            # Se corta antes de leer el cuerpo completo en memoria.
             self._responder(413, {"status": "error", "message": "La solicitud supera el tamaño máximo permitido"})
             return
 
@@ -226,11 +207,6 @@ class handler(BaseHTTPRequestHandler):
             self._responder(400, {"status": "error", "message": "JSON inválido en la solicitud"})
             return
 
-        # Todo el flujo de guardado queda protegido por un try/except general:
-        # antes, cualquier error inesperado (por ejemplo un campo con un tipo
-        # de dato raro que ninguna validación anticipara) tumbaba la función
-        # sin devolver una respuesta JSON válida, y el frontend terminaba
-        # mostrando "el servidor no devolvió JSON" en vez de un error claro.
         try:
             self._procesar_factura(factura_data)
         except Exception as e:
@@ -241,13 +217,13 @@ class handler(BaseHTTPRequestHandler):
             })
 
     def _procesar_factura(self, factura_data):
-        # === 1. Validación previa (evita insertos parciales por datos malos) ===
+        # === 1. Validación previa ===
         error_validacion = validar_factura(factura_data)
         if error_validacion:
             self._responder(400, {"status": "error", "message": error_validacion})
             return
 
-        # === 2. Subida del comprobante de pago (si se envió uno) ===
+        # === 2. Subida del comprobante ===
         comprobante_path = None
         comprobante_base64 = factura_data.get("comprobante_base64")
         comprobante_tipo = factura_data.get("comprobante_tipo")
@@ -262,7 +238,7 @@ class handler(BaseHTTPRequestHandler):
                 self._responder(400, {"status": "error", "message": error_comprobante})
                 return
 
-        # === 3. Guardado ATÓMICO vía RPC: cabecera + detalles en una sola transacción ===
+        # === 3. Estructura de cabecera con tasa_cambio incluida ===
         p_factura = {
             "comprobante_path": comprobante_path,
             "id_factura": factura_data.get("id_factura"),
@@ -277,14 +253,10 @@ class handler(BaseHTTPRequestHandler):
             "subtotal_bs": factura_data.get("subtotal_bs"),
             "descuento_bs": factura_data.get("descuento_bs", 0),
             "total_bs": factura_data.get("total_bs"),
+            "tasa_cambio": factura_data.get("tasa_cambio", 1.0),
             "metodo_pago": factura_data.get("metodo_pago"),
             "referencia": factura_data.get("referencia"),
             "banco": factura_data.get("banco"),
-            # NOTA: este campo es nuevo. Si la función guardar_factura_completa
-            # en Supabase no lo espera todavía, puede ignorarlo sin problema
-            # (es JSON/JSONB), pero para que el dato se guarde de verdad hay
-            # que actualizar esa función para que lo lea y lo inserte en la
-            # tabla `facturas` (columna `observaciones`, agregarla si no existe).
             "observaciones": factura_data.get("observaciones", ""),
         }
 
@@ -318,10 +290,16 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if res.status_code not in (200, 204):
-            # La transacción se revirtió por completo en Postgres: nada quedó guardado a medias.
             print(f"⚠️ Falló guardar_factura_completa: {res.status_code} {res.text}")
             self._responder(502, {
                 "status": "error",
                 "message": f"No se pudo guardar la factura: {res.text}",
             })
             return
+
+        # === 4. Respuesta exitosa al cliente ===
+        self._responder(200, {
+            "status": "success",
+            "message": "Factura guardada exitosamente.",
+            "id_factura": p_factura["id_factura"]
+        })

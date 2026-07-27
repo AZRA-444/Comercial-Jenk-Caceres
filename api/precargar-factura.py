@@ -96,12 +96,14 @@ def validar_factura(data):
         if precio_total_num < 0:
             return f"Producto #{i+1} ({nombre}): precio total inválido"
 
-    for campo in ("subtotal_usd", "total_usd", "subtotal_bs", "total_bs"):
+    for campo in ("subtotal_usd", "total_usd", "subtotal_bs", "total_bs", "tasa_cambio"): 
         valor = data.get(campo)
         if valor is None:
             return f"Falta el campo {campo}"
         try:
-            float(valor)
+            val_num = float(valor)
+            if val_num <= 0:
+                return f"El campo {campo} debe ser un número mayor a 0"
         except (TypeError, ValueError):
             return f"El campo {campo} debe ser numérico"
 
@@ -170,6 +172,7 @@ class handler(BaseHTTPRequestHandler):
             "cedula": factura_data.get("cedula", ""),
             "telefono": factura_data.get("telefono"),
             "vendedor": factura_data.get("vendedor", "Cajero General"),
+            "tasa_cambio": factura_data.get("tasa_cambio"),
             "subtotal_usd": factura_data.get("subtotal_usd"),
             "descuento_usd": factura_data.get("descuento_usd", 0),
             "total_usd": factura_data.get("total_usd"),

@@ -289,21 +289,22 @@ class handler(BaseHTTPRequestHandler):
                     self._responder(400, {"status": "error", "message": f"El método de pago {metodo_pago} requiere un comprobante de pago"})
                     return
 
-                # 6. La tasa de cambio solo vive en la factura temporal (nunca se
-                #    reenvía en el payload de aprobación), así que subtotal_bs y
-                #    descuento_bs se derivan de ella. Si por algún motivo no está
-                #    disponible, se calcula a partir de total_bs/total_usd.
-                tasa_cambio = factura_temp.get("tasa_cambio")
-                if not tasa_cambio:
-                    tasa_cambio = (total_bs / total_usd) if total_usd > 0 else 1
+                # 6. Obtener la tasa de cambio:
+                #    Acepta si el verificador la actualizó en el body, o la toma de la temporal.
+                #    Si no existe en ninguna, la deriva de total_bs / total_usd.
+                tasa_cambio_raw = body_data.get("tasa_cambio") or factura_temp.get("tasa_cambio")
+                
+                try:
+                    tasa_cambio = float(tasa_cambio_raw) if tasa_cambio_raw is not None else (total_bs / total_usd if total_usd > 0 else 1.0)
+                except (TypeError, ValueError):
+                    tasa_cambio = (total_bs / total_usd) if total_usd > 0 else 1.0
+
                 tasa_cambio = float(tasa_cambio)
 
                 subtotal_bs = round(subtotal_usd * tasa_cambio, 2)
                 descuento_bs = round(descuento_usd * tasa_cambio, 2)
 
-                # 7. Armar la factura definitiva combinando lo fijo (datos del
-                #    cliente, tomados de la temporal) con lo editado en el
-                #    formulario de aprobación (productos, totales, pago, comprobante).
+                # 7. Armar la factura definitiva combinando lo fijo con lo editado.
                 p_factura = {
                     "id_factura": id_factura,
                     "nombre": factura_temp.get("nombre"),
@@ -311,6 +312,7 @@ class handler(BaseHTTPRequestHandler):
                     "cedula": factura_temp.get("cedula", ""),
                     "telefono": factura_temp.get("telefono"),
                     "vendedor": factura_temp.get("vendedor", "Cajero General"),
+                    "tasa_cambio": tasa_cambio,  # <--- SE AGREGA ESTE CAMPO PARA LA TABLA DEFINITIVA
                     "subtotal_usd": subtotal_usd,
                     "descuento_usd": descuento_usd,
                     "total_usd": total_usd,
