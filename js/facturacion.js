@@ -475,6 +475,15 @@ function cerrarModalError() {
   document.getElementById("statusModal").classList.add("hidden");
 }
 
+function generarIdFactura() {
+  const sufijoAleatorio =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID().slice(0, 6)
+      : Math.random().toString(36).slice(2, 8);
+
+  return "FAC-" + Date.now().toString().slice(-8) + "-" + sufijoAleatorio;
+}
+
 async function finalizarCompra() {
   const boton = document.getElementById("procesarCompra");
   if (!boton) return;
@@ -490,7 +499,7 @@ async function finalizarCompra() {
   }
 
   const facturaData = {
-    id_factura: "FAC-" + Date.now().toString().slice(-8),
+    id_factura: generarIdFactura(),
     nombre:
       document.getElementById("nameClient")?.value.trim() || "Consumidor Final",
     apellido: document.getElementById("secondNameClient")?.value.trim() || "",
