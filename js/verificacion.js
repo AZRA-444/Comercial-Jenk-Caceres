@@ -221,6 +221,54 @@ function _manejarClickTabla(e) {
   }
 }
 
+/**
+ * Recalcula subtotales, descuentos y totales de la factura temporal activa
+ * basándose en la lista de productos y la tasa de cambio actual.
+ * 
+ * @returns {Object} Objeto con todos los valores calculados
+ */
+function recalcularTotales() {
+  const productos = verState.productos || [];
+  const tasa = Number(verState.tasaCambio) || 1;
+
+  // 1. Separar productos descontables vs. excluidos
+  const descontables = productos.filter(p => !p.excluidoDescuento);
+  const excluidos   = productos.filter(p => !!p.excluidoDescuento);
+
+  // 2. Subtotales parciales
+  const subDescUSD = descontables.reduce((acc, p) => acc + (Number(p.precioTotal) || 0), 0);
+  const subExcUSD  = excluidos.reduce((acc, p) => acc + (Number(p.precioTotal) || 0), 0);
+  const subTotalUSD = subDescUSD + subExcUSD;
+
+  // 3. Escala de descuento según monto aplicable (USD)
+  let porcentaje = 0;
+  if      (subDescUSD > 150) porcentaje = 20;
+  else if (subDescUSD >  50) porcentaje = 15;
+  else if (subDescUSD >  10) porcentaje = 10;
+
+  // 4. Cálculos finales
+  const descuentoUSD = subDescUSD * (porcentaje / 100);
+  const totalUSD     = subDescUSD - descuentoUSD + subExcUSD;
+  const totalBS      = totalUSD * tasa;
+
+  // 5. Sincronizar el estado global del módulo
+  verState.subtotalUSD  = subTotalUSD;
+  verState.descuentoUSD = descuentoUSD;
+  verState.totalUSD     = totalUSD;
+  verState.totalBS      = totalBS;
+
+  return {
+    subTotalUSD,
+    descuentoUSD,
+    totalUSD,
+    totalBS,
+    porcentaje
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 5. Renderizar tabla editable y recalcular totales
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // 5. Renderizar tabla editable y recalcular totales
 // ---------------------------------------------------------------------------
@@ -234,6 +282,7 @@ function verActualizarTabla() {
     return;
   }
 
+  // 1. Renderizar filas de la tabla
   tbody.innerHTML = verState.productos.map((p, i) => {
     const excluido      = !!p.excluidoDescuento;
     const precioUndBS   = (p.precioUnitario * tasa).toFixed(2);
@@ -261,40 +310,17 @@ function verActualizarTabla() {
       </tr>`;
   }).join('');
 
-  // Calcular totales con lógica de descuento igual a facturacion.js
-  const descontables = verState.productos.filter(p => !p.excluidoDescuento);
-  const excluidos    = verState.productos.filter(p =>  p.excluidoDescuento);
+  // 2. Ejecutar cálculo centralizado
+  const { subTotalUSD, descuentoUSD, totalUSD, totalBS } = recalcularTotales();
 
-  const subDescUSD = descontables.reduce((a, p) => a + p.precioTotal, 0);
-  const subExcUSD  = excluidos.reduce((a, p) => a + p.precioTotal, 0);
-  const subTotalUSD = subDescUSD + subExcUSD;
-
-  let porcentaje = 0;
-  if      (subDescUSD > 150) porcentaje = 20;
-  else if (subDescUSD >  50) porcentaje = 15;
-  else if (subDescUSD >  10) porcentaje = 10;
-
-  const descuentoUSD = subDescUSD * (porcentaje / 100);
-  const totalUSD     = subDescUSD - descuentoUSD + subExcUSD;
-  const totalBS      = totalUSD * tasa;
-
-  verState.subtotalUSD  = subTotalUSD;
-  verState.descuentoUSD = descuentoUSD;
-  verState.totalUSD     = totalUSD;
-  verState.totalBS      = totalBS;
-
+  // 3. Reflejar montos en la interfaz
   _actualizarTotalesUI(subTotalUSD, descuentoUSD, totalUSD, totalBS);
 
-  // Actualizar monto en los detalles de pago si ya están visibles
-  const metodo = document.getElementById('verMetodoPago').value;
-  if (metodo) _actualizarMontoPago(metodo, totalUSD, totalBS);
-}
-
-function _actualizarTotalesUI(subtotal, descuento, total, totalBS) {
-  document.getElementById('totSubtotalUsd').textContent = `$${subtotal.toFixed(2)}`;
-  document.getElementById('totDescuento').textContent   = `-$${descuento.toFixed(2)}`;
-  document.getElementById('totTotalUsd').textContent    = `$${total.toFixed(2)}`;
-  document.getElementById('totTotalBs').textContent     = `Bs ${totalBS.toFixed(2)}`;
+  // 4. Actualizar el banner de la caja de pago si hay un método seleccionado
+  const metodo = document.getElementById('verMetodoPago')?.value;
+  if (metodo) {
+    _actualizarMontoPago(metodo, totalUSD, totalBS);
+  }
 }
 
 // ---------------------------------------------------------------------------

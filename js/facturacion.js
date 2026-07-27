@@ -184,9 +184,7 @@ function actualizarResumenCliente() {
 
   if (state.clienteCompleto) {
     const name = document.getElementById("nameClient").value.trim();
-    const secondName = document
-      .getElementById("secondNameClient")
-      .value.trim();
+    const secondName = document.getElementById("secondNameClient").value.trim();
     const documentID = document.getElementById("documentID").value.trim();
     const numberPhone = document.getElementById("numberPhone").value.trim();
 
@@ -454,7 +452,7 @@ function calcularPrecioTotal() {
   cantidadInput.addEventListener("input", calcular);
   precioUndInput.addEventListener("input", calcular);
 }
-``
+``;
 function mostrarModalCargando() {
   document.getElementById("statusModal").classList.remove("hidden");
   document.getElementById("modalLoading").classList.remove("hidden");
@@ -493,11 +491,19 @@ async function finalizarCompra() {
 
   const facturaData = {
     id_factura: "FAC-" + Date.now().toString().slice(-8),
-    nombre: document.getElementById("nameClient")?.value.trim() || "Consumidor Final",
+    nombre:
+      document.getElementById("nameClient")?.value.trim() || "Consumidor Final",
     apellido: document.getElementById("secondNameClient")?.value.trim() || "",
     cedula: document.getElementById("documentID")?.value.trim() || "V-00000000",
-    telefono: document.getElementById("numberPhone")?.value.trim().replace(/\D/g, '').replace(/^0/, '+58') || "N/A",
+    telefono:
+      document
+        .getElementById("numberPhone")
+        ?.value.trim()
+        .replace(/\D/g, "")
+        .replace(/^0/, "+58") || "N/A",
     vendedor: localStorage.getItem("vendedorActual") || "Cajero General",
+
+    tasa_cambio: state.tasaConver, // <--- NUEVO CAMPO ENVIADO AL BACKEND
 
     subtotal_usd: state.montoFinalUSD + state.descUSD,
     descuento_usd: state.descUSD,
@@ -507,26 +513,24 @@ async function finalizarCompra() {
     descuento_bs: state.descBS,
     total_bs: state.montoFinalBS,
 
-    // Productos con estructura exacta que espera el backend
-    productos: state.listaProductos.map(p => ({
+    productos: state.listaProductos.map((p) => ({
       nombre: p.nombre,
       cantidad: p.cantidad,
       precioUnitario: p.precioUnitario,
-      precioTotal: p.precioTotal
-    }))
+      precioTotal: p.precioTotal,
+    })),
   };
-
   boton.disabled = true;
   mostrarModalCargando();
 
   try {
     const response = await fetch(BACKEND_API_URL, {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        Accept: "application/json",
       },
-      body: JSON.stringify(facturaData)
+      body: JSON.stringify(facturaData),
     });
 
     // === CRÍTICO: Verificar si realmente es JSON ===
@@ -551,10 +555,9 @@ async function finalizarCompra() {
     setTimeout(() => {
       location.reload();
     }, 1800);
-
   } catch (error) {
     console.error("Error en finalizarCompra:", error);
-    
+
     document.getElementById("statusModal").classList.remove("hidden");
     mostrarModalError(error.message);
   } finally {

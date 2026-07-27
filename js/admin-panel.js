@@ -150,6 +150,9 @@ async function buscarFacturas() {
   }
 }
 
+// ============================================================
+// RENDER VENTAS (Estructura Original + Acumulados Reales)
+// ============================================================
 function renderVentas(facturas) {
   const tbody = document.getElementById("tbody-ventas");
   const empty = document.getElementById("empty-ventas");
@@ -158,58 +161,89 @@ function renderVentas(facturas) {
   if (tbody) tbody.innerHTML = "";
   if (countLabel) countLabel.textContent = `(${facturas.length} registros)`;
 
+  // Acumuladores reales para pasar a los KPIs
+  let totalUSDReal = 0;
+  let totalBsReal = 0;
+
   if (!facturas.length) {
     if (empty) empty.style.display = "block";
   } else {
     if (empty) empty.style.display = "none";
+
     facturas.forEach((f) => {
-      const subtotal = (Number(f.total_usd) || 0) + (Number(f.descuento_usd) || 0);
+      // 1. Extraer montos en USD
+      const totalUSD = Number(f.total_usd) || 0;
+      const descuentoUSD = Number(f.descuento_usd) || 0;
+      const subtotal = totalUSD + descuentoUSD;
+
+      // 2. Extraer monto real en Bs (con fallback por si hay facturas históricas sin f.total_bs)
+      const tasaHistorica = Number(f.tasa_cambio) || (typeof TASA_BCV_ACTUAL !== "undefined" ? TASA_BCV_ACTUAL : 1);
+      const totalBs = Number(f.total_bs) > 0 
+        ? Number(f.total_bs) 
+        : totalUSD * tasaHistorica;
+
+      // Acumular totales exactos
+      totalUSDReal += totalUSD;
+      totalBsReal += totalBs;
+
       const tr = document.createElement("tr");
-      // Todos los campos de texto se escapan antes de insertarse en el DOM:
-      // vienen de la base de datos y, en última instancia, de lo que un
-      // usuario haya escrito (o de una llamada directa a la API), así que
-      // no se puede confiar en que no contengan HTML/JS.
+
+      // 3. Renderizar fila respetando tu maquetación original
       tr.innerHTML = `
-        <td>${escapeHtml(f.id_factura)}</td>
+        <td>${escapeHtml(f.id_factura || '')}</td>
         <td>${fmtFecha(f[COL_FECHA])}</td>
-        <td>${escapeHtml(f.nombre)} ${escapeHtml(f.apellido)}</td>
-        <td>${escapeHtml(f.cedula)}</td>
-        <td>${escapeHtml(f.vendedor)}</td>
+        <td>${escapeHtml(f.nombre || '')} ${escapeHtml(f.apellido || '')}</td>
+        <td>${escapeHtml(f.cedula || '')}</td>
+        <td>${escapeHtml(f.vendedor || '')}</td>
         <td><span class="tag">${escapeHtml(f.metodo_pago || "-")}</span></td>
         <td class="num">${fmtUSD(subtotal)}</td>
-        <td class="num">${fmtUSD(f.descuento_usd)}</td>
-        <td class="num">${fmtUSD(f.total_usd)}</td>
-        <td class="num">${fmtBS(f.total_bs)}</td>
+        <td class="num">${fmtUSD(descuentoUSD)}</td>
+        <td class="num">${fmtUSD(totalUSD)}</td>
+        <td class="num">${fmtBS(totalBs)}</td>
         <td>
           <button class="btn small ghost" data-accion="ver-detalle" data-id="${escapeHtml(f.id_factura)}">Ver</button>
         </td>`;
+
       if (tbody) tbody.appendChild(tr);
     });
   }
 
-  renderKPIs(facturas);
-  renderCharts(facturas);
+  // Guardar estado global
   window.__facturasActuales = facturas;
+
+  // Renderizar KPIs pasando tanto la lista como las sumas reales calculadas
+  renderKPIs(facturas, totalUSDReal, totalBsReal);
+  renderCharts(facturas);
 }
 
-function renderKPIs(facturas) {
-  const totalUSD = facturas.reduce((s, f) => s + (Number(f.total_usd) || 0), 0);
-  const totalBS = facturas.reduce((s, f) => s + (Number(f.total_bs) || 0), 0);
-  const totalDesc = facturas.reduce((s, f) => s + (Number(f.descuento_usd) || 0), 0);
+// ============================================================
+// FUNCTION RENDER KPIS (Ajustada para montos reales)
+// ============================================================
+function renderKPIs(facturas, totalUSDReal = 0, totalBsReal = 0) {
+  // Si no se pasaron las sumas precalculadas, las calcula en el momento
+  if (arguments.length === 1 && facturas.length > 0) {
+    totalUSDReal = facturas.reduce((acc, f) => acc + (Number(f.total_usd) || 0), 0);
+    totalBsReal = facturas.reduce((acc, f) => {
+      const bs = Number(f.total_bs);
+      if (bs > 0) return acc + bs;
+      const tasa = Number(f.tasa_cambio) || (typeof TASA_BCV_ACTUAL !== "undefined" ? TASA_BCV_ACTUAL : 1);
+      return acc + ((Number(f.total_usd) || 0) * tasa);
+    }, 0);
+  }
 
-  const elUsd = document.getElementById("kpi-usd");
-  const elBs = document.getElementById("kpi-bs");
-  const elCount = document.getElementById("kpi-count");
-  const elAvg = document.getElementById("kpi-avg");
-  const elDesc = document.getElementById("kpi-desc");
+  const kpiTotalUSD = document.getElementById("kpi-total-usd");
+  const kpiTotalBS = document.getElementById("kpi-total-bs");
+  const kpiCantVentas = document.getElementById("kpi-cant-ventas");
+  const kpiPromedio = document.getElementById("kpi-promedio-ticket");
 
-  if (elUsd) elUsd.textContent = fmtUSD(totalUSD);
-  if (elBs) elBs.textContent = fmtBS(totalBS);
-  if (elCount) elCount.textContent = facturas.length;
-  if (elAvg) elAvg.textContent = fmtUSD(facturas.length ? totalUSD / facturas.length : 0);
-  if (elDesc) elDesc.textContent = fmtUSD(totalDesc);
+  const totalVentas = facturas.length;
+  const ticketPromedioUSD = totalVentas > 0 ? (totalUSDReal / totalVentas) : 0;
+
+  if (kpiTotalUSD) kpiTotalUSD.textContent = fmtUSD(totalUSDReal);
+  if (kpiTotalBS) kpiTotalBS.textContent = `Bs. ${fmtBS(totalBsReal)}`;
+  if (kpiCantVentas) kpiCantVentas.textContent = totalVentas;
+  if (kpiPromedio) kpiPromedio.textContent = fmtUSD(ticketPromedioUSD);
 }
-
 // ============================================================
 // DIAGNÓSTICO EN CONSOLA PARA LAS GRÁFICAS
 // ============================================================
