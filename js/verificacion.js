@@ -125,7 +125,6 @@ function seleccionarFactura(index) {
   document.getElementById('detailCedula').textContent    = factura.cedula    || 'N/A';
   document.getElementById('detailTelefono').textContent  = factura.telefono  || 'N/A';
   document.getElementById('detailVendedor').textContent  = factura.vendedor  || 'N/A';
-  document.getElementById('detailMetodoPago').textContent = formatMetodoPago(factura.metodo_pago);
 
   // Construir estado editable de productos
   const detalles   = factura.detalles_factura_temporal || [];
@@ -138,16 +137,6 @@ function seleccionarFactura(index) {
     precioTotal:       Number(p.precio_total),
     excluidoDescuento: false,
   }));
-
-  // Preseleccionar método de pago si ya viene en la factura
-  const selectMetodo = document.getElementById('verMetodoPago');
-  if (factura.metodo_pago && selectMetodo) {
-    selectMetodo.value = factura.metodo_pago;
-    verSelectMetodoPago(factura.metodo_pago);
-  } else {
-    selectMetodo.value = '';
-    document.getElementById('verPaymentDetails').innerHTML = '';
-  }
 
   // Mostrar panel
   document.getElementById('detailEmpty').classList.add('hidden');
@@ -254,9 +243,6 @@ function recalcularTotales() {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 5. Renderizar tabla editable y recalcular totales
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // 5. Renderizar tabla editable y recalcular totales
 // ---------------------------------------------------------------------------
