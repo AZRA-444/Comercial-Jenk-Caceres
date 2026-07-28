@@ -1,89 +1,86 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="../css/main.css" />
-    <title>Facturas Recientes</title>
-  </head>
-  <body>
-    <div class="topbar">
-      <div class="brand">
-        <h2>Facturas Recientes</h2>
-      </div>
-      <div class="clock" id="clock"></div>
-      <div class="brand">
-        <a href="../../index.html" class="btn-secondary" style="padding:10px">
-          <i class="fas fa-arrow-left"></i>Volver
-        </a>
-      </div>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="../css/main.css"/>
+  <title>Facturas de hoy — Comercial Jenk Cáceres</title>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      Facturas de hoy
+      <small>Comercial Jenk Cáceres</small>
     </div>
+    <div class="clock" id="clock"></div>
+    <a href="../../index.html" class="btn-cerrar-sesion">
+      <i class="fas fa-arrow-left"></i> Volver
+    </a>
+  </div>
 
-    <div class="wrap">
-      <!-- ===================== PANEL FACTURAS DE HOY ===================== -->
-      <div class="panel active" id="panel-recientes">
-        <div class="status-msg" id="status-recientes">Cargando…</div>
+  <div class="wrap fade-in-up">
 
+    <!-- Panel facturas de hoy -->
+    <div class="panel active" id="panel-recientes">
+
+      <div class="status-msg" id="status-recientes"></div>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
         <h2 class="section-title">
-          Facturas del día <small id="recientes-count-label"></small>
-          <button
-            class="btn ghost small"
-            id="btn-refrescar-recientes"
-            style="float: right"
-          >
-            <i class="fas fa-rotate"></i> Actualizar
-          </button>
+          Facturas del día
+          <small id="recientes-count-label"></small>
         </h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Hora</th>
-                <th>Cliente</th>
-                <th>Cédula</th>
-                <th>Vendedor</th>
-                <th>Método</th>
-                <th class="num">Total $</th>
-                <th class="num">Total Bs</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-recientes"></tbody>
-          </table>
-          <div class="empty-state" id="empty-recientes" style="display: none">
-            Aún no se han registrado facturas hoy.
-          </div>
+        <button class="btn ghost small" id="btn-refrescar-recientes">
+          <i class="fas fa-rotate"></i> Actualizar
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Cédula</th>
+              <th>Vendedor</th>
+              <th>Método</th>
+              <th class="num">Total $</th>
+              <th class="num">Total Bs</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-recientes"></tbody>
+        </table>
+        <div class="empty-state" id="empty-recientes" style="display:none;">
+          <i class="fas fa-receipt" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          Aún no se han registrado facturas hoy.
         </div>
       </div>
-    </div>
 
-    <!-- Modal detalle factura -->
-    <div class="modal-overlay" id="modal-detalle">
-      <div class="modal">
-        <div class="modal-head">
-          <h3 id="modal-detalle-title">Factura</h3>
-          <button id="modal-detalle-close" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="modal-body" id="modal-detalle-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal detalle factura -->
+  <div class="modal-overlay" id="modal-detalle">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modal-detalle-title">Factura</h3>
+        <button id="modal-detalle-close" aria-label="Cerrar" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--muted);">✕</button>
       </div>
+      <div class="modal-body" id="modal-detalle-body"></div>
     </div>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="../../js/supabase-config.js"></script>
-    <script src="../../js/utils.js"></script>
-    <script src="../../js/facturasRecientes.js"></script>
-
-  </body>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../js/supabase-config.js"></script>
+  <script src="../../js/utils.js"></script>
+  <script src="../../js/facturasRecientes.js"></script>
+</body>
 </html>
-
