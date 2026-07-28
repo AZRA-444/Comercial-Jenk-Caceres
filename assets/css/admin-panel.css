@@ -1,585 +1,297 @@
-a {
-    color: inherit;
-}
+/* ============================================================
+   ADMIN-PANEL.CSS — Panel de administración + Historial.
+   Depende de global.css. Mobile-first.
+   ============================================================ */
 
-/* Accesibilidad y Foco */
-a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-}
-
-/* Animaciones */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(16px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ================= TOPBAR NAVBAR ================= */
+/* ── Topbar ── */
 .topbar {
-    background: rgba(11, 15, 23, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    border-bottom: 1px solid var(--glass-border);
+  background: var(--ink);
+  padding: 14px 20px;
+  display: flex; flex-direction: column; gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  position: sticky; top: 0; z-index: 90;
 }
 
-.topbar .brand {
-    font-size: 1.3rem;
-    font-weight: 600;
-    letter-spacing: .2px;
-}
-
+.topbar .brand { font-size: 1.05rem; font-weight: 600; letter-spacing: .2px; color: #fff; }
 .topbar .brand small {
-    display: block;
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 400;
-    text-transform: uppercase;
-    margin-top: 2px;
-    letter-spacing: 0.5px;
+  display: block; font-size: .68rem; color: var(--rose-light);
+  font-weight: 400; text-transform: uppercase;
+  margin-top: 1px; letter-spacing: .5px;
 }
 
 .topbar .clock {
-    font-size: 12px;
-    color: var(--accent);
-    font-weight: 500;
+  font-size: .78rem; color: rgba(255,255,255,.5);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ================= LAYOUT WRAPPER ================= */
+/* ── Wrapper ── */
 .wrap {
-    max-width: var(--content-width);
-    margin: 0 auto;
-    padding: clamp(16px, 3vw, 40px);
-    padding-bottom: 80px;
-    animation: fadeInUp .5s var(--ease) both;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 36px);
+  padding-bottom: 60px;
+  animation: fadeInUp .4s var(--ease) both;
 }
 
-/* ================= NAV TABS CONTROL ================= */
+/* ── Tabs ── */
 .ledger-tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 24px;
-    border-bottom: 1px solid var(--glass-border);
-    overflow-x: auto;
-    white-space: nowrap;
+  display: flex; gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px; overflow-x: auto;
+  white-space: nowrap;
 }
-
-.ledger-tabs::-webkit-scrollbar {
-    height: 0px;
-}
+.ledger-tabs::-webkit-scrollbar { height: 0; }
 
 .ledger-tabs button {
-    font-family: 'Poppins', sans-serif;
-    font-size: .85rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    background: none;
-    border: none;
-    padding: 12px 18px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    transition: all 0.3s var(--ease);
+  font-family: 'Inter', sans-serif;
+  font-size: .82rem; font-weight: 500;
+  text-transform: uppercase; letter-spacing: .5px;
+  background: none; border: none;
+  padding: 11px 20px; cursor: pointer;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .2s, border-color .2s;
 }
-
 .ledger-tabs button.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-    font-weight: 600;
+  color: var(--rose-deep); border-bottom-color: var(--rose);
+  font-weight: 600;
 }
+.ledger-tabs button:hover:not(.active) { color: var(--ink); }
 
-.ledger-tabs button:hover:not(.active) {
-    color: var(--text);
-    background: rgba(255, 255, 255, 0.02);
-}
+.panel { display: none; }
+.panel.active { display: block; }
 
-.panel {
-    display: none;
-}
-
-.panel.active {
-    display: block;
-}
-
-/* ================= COMPONENTES GLASS CARDS ================= */
-.filters,
-.kpi,
-.chart-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-}
-
-/* Filtros (Diseño Mobile-First que escala a PC) */
+/* ── Filtros ── */
 .filters {
-    padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  display: grid; grid-template-columns: 1fr;
+  gap: 14px; margin-bottom: 22px;
 }
 
-/* ================= COMPONENTES DE FORMULARIO ================= */
 .field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
+  display: flex; flex-direction: column; gap: 6px; width: 100%;
 }
-
 .field label {
-    font-size: .80rem;
-    color: var(--text-secondary);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  font-size: .72rem; color: var(--muted);
+  font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
 }
 
-input,
-select {
-    width: 100%;
-    min-height: 46px;
-    padding: 12px;
-    border: none;
-    border-radius: var(--radius-sm);
-    outline: none;
-    background: rgba(255, 255, 255, .05);
-    color: white;
-    font-size: .95rem;
-    font-family: 'Poppins', sans-serif;
-    transition: outline 0.2s ease, background-color 0.2s ease;
-}
-
-input:focus,
-select:focus {
-    outline: 2px solid var(--accent);
-    background: rgba(255, 255, 255, .08);
-}
-
-input[disabled] {
-    opacity: .5;
-    cursor: not-allowed;
-}
-
-select {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-    background-size: 16px;
-    padding-right: 40px;
-}
-
-select option {
-    background-color: var(--bg-secondary);
-    color: var(--text);
-}
-
-/* ================= BOTONES UNIFICADOS ================= */
-.btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 46px;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: .95rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    background: white;
-    color: var(--bg-secondary);
-    font-family: 'Poppins', sans-serif;
-    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.btn:hover {
-    transform: translateY(-2px);
-    background-color: #f9fafb;
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
-}
-
-.btn:active {
-    transform: scale(.98);
-}
-
-.btn.ghost {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--glass-border);
-    color: var(--text);
-}
-
-.btn.ghost:hover {
-    background: rgba(255, 255, 255, 0.1);
-    box-shadow: none;
-}
-
-.btn.small {
-    min-height: 32px;
-    padding: 4px 12px;
-    font-size: 0.8rem;
-    border-radius: 6px;
-    width: auto;
-}
-
-/* ================= INDICADORES KPIS GRID ================= */
+/* ── KPIs ── */
 .kpis {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
+  display: grid; grid-template-columns: 1fr;
+  gap: 14px; margin-bottom: 22px;
 }
 
 .kpi {
-    padding: 20px;
-    border-left: 4px solid var(--accent);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  position: relative; overflow: hidden;
+}
+.kpi::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: var(--rose);
 }
 
 .kpi .label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    color: var(--text-secondary);
-    font-weight: 500;
+  font-size: .7rem; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--muted);
+  font-weight: 600; margin-bottom: 5px;
 }
-
 .kpi .value {
-    font-size: 1.7rem;
-    font-weight: 700;
-    margin-top: 6px;
-    color: var(--text);
+  font-size: 1.55rem; font-weight: 700;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
+.kpi .sub { font-size: .75rem; color: var(--muted-2); margin-top: 4px; }
 
-.kpi .sub {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    margin-top: 4px;
-}
-
-/* ================= PANEL DE GRÁFICAS ================= */
+/* ── Gráficas ── */
 .charts {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin-bottom: 32px;
+  display: grid; grid-template-columns: 1fr;
+  gap: 14px; margin-bottom: 28px;
 }
 
 .chart-card {
-    padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px;
+  box-shadow: var(--shadow);
 }
-
 .chart-card h3 {
-    font-size: var(--fs-h2);
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 16px;
-    font-weight: 500;
+  font-size: .72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .6px;
+  margin-bottom: 14px; font-weight: 600;
 }
+.chart-card canvas { max-height: 210px; width: 100% !important; }
 
-.chart-card canvas {
-    max-height: 220px;
-    width: 100% !important;
-}
-
-/* ================= DETALLE DE TABLAS PREMIUM ================= */
+/* ── Título de sección ── */
 .section-title {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-bottom: 16px;
-    color: var(--text);
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
+  font-size: 1rem; font-weight: 600;
+  margin-bottom: 14px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 8px;
 }
-
 .section-title small {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    font-weight: 400;
+  font-size: .8rem; color: var(--muted); font-weight: 400;
 }
 
+/* ── Tabla ── */
 .table-wrap {
-    width: 100%;
-    overflow-x: auto;
-    border-radius: var(--radius);
-    border: 1px solid var(--glass-border);
-    background: var(--glass-bg);
-    box-shadow: var(--shadow);
-    margin-bottom: 32px;
-    /* Suaviza el scroll en dispositivos táctiles */
-    -webkit-overflow-scrolling: touch; 
+  width: 100%; overflow-x: auto;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  margin-bottom: 28px;
+  -webkit-overflow-scrolling: touch;
 }
-
-.table-wrap::-webkit-scrollbar {
-    height: 8px; /* Un poco más grueso para que sea fácil de arrastrar */
-}
-
+.table-wrap::-webkit-scrollbar { height: 7px; }
 .table-wrap::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, .15);
-    border-radius: 20px;
+  background: var(--border-2); border-radius: 20px;
 }
-
-.table-wrap::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, .25);
-}
+.table-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
 
 table {
-    width: 100%;
-    min-width: 900px; /* Un ancho mínimo balanceado */
-    border-collapse: collapse;
-    table-layout: auto; /* Permite que las columnas se adapten orgánicamente al contenido */
+  width: 100%; min-width: 900px;
+  border-collapse: collapse; table-layout: auto;
 }
 
-thead {
-    background: rgba(255, 255, 255, .03);
-}
+thead { background: var(--surface-1); }
 
 thead th {
-    text-align: left;
-    font-size: .80rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .7px;
-    color: var(--accent);
-    border-bottom: 2px solid var(--glass-border); /* Línea divisoria más clara */
-    padding: 16px 20px; /* Más aire vertical y horizontal */
-    
-    /* Evita que los títulos se corten o hagan saltos de línea extraños */
-    white-space: nowrap; 
-    word-wrap: normal;
+  text-align: left;
+  font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .7px;
+  color: var(--muted);
+  border-bottom: 2px solid var(--border);
+  padding: 14px 18px; white-space: nowrap;
 }
+thead th.num { text-align: right; }
+thead th.text-center { text-align: center; }
 
 tbody tr {
-    border-bottom: 1px solid rgba(255, 255, 255, .04);
-    transition: background 0.2s ease;
+  border-bottom: 1px solid var(--border);
+  transition: background .12s;
 }
-
-tbody tr:hover {
-    background: rgba(255, 255, 255, .02); /* Mayor contraste al hacer hover */
-}
+tbody tr:hover { background: var(--rose-faint); }
+tbody tr:last-child { border-bottom: none; }
 
 tbody td {
-    padding: 16px 20px; /* Consistencia de espaciado con el thead */
-    color: #e5e7eb;
-    vertical-align: middle;
-    font-size: 0.9rem;
-    line-height: 1.4; /* Mejora la lectura si el texto llega a envolverse */
-    
-    /* Evita que datos clave (como fechas o nombres cortos) se rompan en dos líneas */
-    white-space: nowrap; 
+  padding: 13px 18px;
+  color: var(--text); vertical-align: middle;
+  font-size: .875rem; white-space: nowrap;
+  line-height: 1.4;
+}
+tbody td.text-wrap, thead th.text-wrap {
+  white-space: normal; min-width: 180px;
 }
 
-/* Permitir que columnas con descripciones largas o textos amplios sí se envuelvan */
-tbody td.text-wrap, 
-thead th.text-wrap {
-    white-space: normal;
-    min-width: 200px; /* Asegura que no se aplaste la columna */
-}
+.text-center { text-align: center; }
 
-/* Alineaciones específicas para mantener la armonía visual */
-.num {
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-}
-
-thead th.num {
-    text-align: right; /* Alinea el título numérico con sus datos */
-}
-
-.text-center {
-    text-align: center;
-}
-
-thead th.text-center {
-    text-align: center;
-}
-
-.tag {
-    display: inline-flex; /* Cambiado a inline-flex para centrar mejor el texto */
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 4px 12px;
-    border-radius: 20px;
-    background: var(--accent-soft);
-    color: var(--accent);
-    white-space: nowrap;
-}
-
-.tag.pend {
-    background: rgba(200, 120, 31, .15);
-    color: var(--amber);
-}
-
+/* ── Estado vacío ── */
 .empty-state {
-    padding: 60px 20px; /* Más espacio para destacar que está vacío */
-    text-align: center;
-    color: var(--text-secondary);
-    font-size: 0.95rem;
+  padding: 48px 20px; text-align: center;
+  color: var(--muted); font-size: .875rem;
 }
 
-/* ================= MODALES NATIVOS ADAPTADOS ================= */
+/* ── Botones de acción en tabla ── */
+.btn { width: auto; }
+.btn.small, .btn-sm { min-height: 32px; }
+
+/* ── Modales ── */
 .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(5, 7, 11, 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
+  display: none; position: fixed; inset: 0;
+  background: rgba(26,18,24,.55);
+  backdrop-filter: blur(5px);
+  z-index: 9999;
+  align-items: center; justify-content: center; padding: 20px;
 }
-
 .modal-overlay.active {
-    display: flex;
-    animation: fadeInUp 0.4s var(--ease) both;
+  display: flex;
+  animation: fadeInUp .35s var(--ease) both;
 }
 
 .modal {
-    background: var(--bg-secondary);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius);
-    max-width: 550px;
-    width: 100%;
-    max-height: 85vh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-lg);
-    color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  max-width: 540px; width: 100%;
+  max-height: 88vh; overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
 }
 
 .modal-head {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--glass-border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  padding: 18px 22px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
 }
-
-.modal-head h3 {
-    font-size: 1.15rem;
-    font-weight: 600;
-}
-
+.modal-head h3 { font-size: 1rem; font-weight: 600; }
 .modal-head button {
-    background: none;
-    border: none;
-    font-size: 1.3rem;
-    cursor: pointer;
-    color: var(--text-secondary);
-    transition: color 0.2s;
+  background: none; border: none; font-size: 1.1rem;
+  cursor: pointer; color: var(--muted); padding: 4px; border-radius: 4px;
+  transition: color .15s;
 }
+.modal-head button:hover { color: var(--danger); }
 
-.modal-head button:hover {
-    color: var(--danger);
-}
-
-.modal-body {
-    padding: 20px 24px;
-}
-
+.modal-body { padding: 18px 22px; }
 .modal-body .row {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px dashed rgba(255, 255, 255, .1);
-    font-size: 0.95rem;
+  display: flex; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px dashed var(--border);
+  font-size: .9rem;
 }
-
-.modal-body .row span:first-child {
-    color: var(--text-secondary);
-}
-
-.modal-body .row span:last-child {
-    color: var(--text);
-    font-weight: 500;
-}
+.modal-body .row span:first-child { color: var(--muted); }
+.modal-body .row span:last-child  { color: var(--text); font-weight: 500; }
 
 .modal-foot {
-    padding: 16px 24px;
-    border-top: 1px solid var(--glass-border);
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
+  padding: 14px 22px; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+.modal-foot .btn { min-height: 38px; padding: 0 18px; }
+
+/* ── Botón cerrar sesión ── */
+.btn-cerrar-sesion {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(255,255,255,.8);
+  font-family: 'Inter', sans-serif;
+  font-size: .82rem; font-weight: 500;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  display: flex; align-items: center; gap: 7px;
+}
+.btn-cerrar-sesion:hover { background: rgba(255,255,255,.13); color: #fff; }
+
+/* ── Botón status ── */
+.status-msg {
+  font-size: .85rem; color: var(--muted);
+  padding: 6px 2px; margin-bottom: 8px;
 }
 
-.modal-foot .btn {
-    width: auto;
-    min-height: 40px;
-    padding: 0 20px;
-}
-
-/* ============================================================
-     MEDIA QUERIES (OPTIMIZACIÓN PARA GRANDES PANTALLAS / PC)
-     ============================================================ */
-
-/* Dispositivos Medianos (Tablets horizontales y portátiles pequeños) */
+/* ── Media queries ── */
 @media (min-width: 768px) {
-    .topbar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        padding: 20px 40px;
-    }
-
-    .filters {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .kpis {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .charts {
-        grid-template-columns: repeat(2, 1fr);
-    }
+  .topbar {
+    flex-direction: row; align-items: center;
+    justify-content: space-between; padding: 16px 36px;
+  }
+  .filters { grid-template-columns: repeat(2, 1fr); }
+  .kpis   { grid-template-columns: repeat(3, 1fr); }
+  .charts { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Dispositivos Grandes (Laptops y PCs de escritorio) */
 @media (min-width: 1200px) {
-    .filters {
-        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-        align-items: end;
-    }
-
-    #btn-buscar,
-    #btn-limpiar,
-    #btn-buscar-com {
-        width: 100%;
-    }
-
-    .kpis {
-        grid-template-columns: repeat(5, 1fr);
-    }
-
-    .charts {
-        grid-template-columns: 1.4fr 1fr 1fr;
-    }
+  :root { --content-width: 1180px; }
+  .filters {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    align-items: end;
+  }
+  .kpis   { grid-template-columns: repeat(5, 1fr); }
+  .charts { grid-template-columns: 1.4fr 1fr 1fr; }
 }

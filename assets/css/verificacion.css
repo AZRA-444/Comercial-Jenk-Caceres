@@ -1,126 +1,95 @@
-/* verificacion.css
-   Estilos exclusivos del módulo de Verificación de Pagos.
-   Depende de global.css y facturacion.css (cargados antes desde main.css).
-   ------------------------------------------------------------------ */
+/* ============================================================
+   VERIFICACION.CSS — Módulo de verificación de pagos.
+   Depende de global.css + facturacion.css. Mobile-first.
+   ============================================================ */
 
-/* ====================================================================
-   LAYOUT PRINCIPAL: dos columnas en desktop, apilado en mobile
-   ==================================================================== */
-.ver-layout {
+/* ── Layout principal ── */
+body {
+  background: var(--surface-1);
+  min-height: 100dvh;
+  display: flex; flex-direction: column;
+}
+
+main {
+  flex: 1;
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: clamp(16px, 3vw, 28px);
+}
+
+.main-card.ver-layout {
+  width: 100%;
+  max-width: var(--content-width);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+
   display: grid;
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
     "sidebar"
     "detail";
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
 }
 
-.ver-layout .invoice-header {
+/* ── Header ── */
+.invoice-header {
   grid-area: header;
-  padding: clamp(16px, 2.5vw, 28px);
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--glass-border);
+  display: flex;
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0;
-  min-width:0;
-  flex-wrap:nowrap;
+  flex-wrap: nowrap;
+  padding: clamp(14px, 2.5vw, 22px) clamp(16px, 2.5vw, 28px);
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
 }
 
-.ver-layout .invoice-header > div:first-child{
-    flex:1;
-    min-width:0;
+.invoice-header h1 {
+  font-size: clamp(1.05rem, 1rem + 1vw, 1.4rem);
+  font-weight: 700; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-.ver-layout .invoice-header h1 {
-  font-size: clamp(1.1rem, 1rem + 1vw, 1.5rem);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.invoice-header .subtitle {
+  font-size: .8rem; color: var(--muted); margin-top: 2px;
 }
-
-.ver-layout .invoice-header .subtitle {
-  color: var(--text-secondary);
-  font-size: .82rem;
-  margin-top: 2px;
-}
+.invoice-header > div:first-child { flex: 1; min-width: 0; }
 
 .header-actions {
-    display:flex;
-    align-items:center;
-    gap:10px;
-
-    flex-shrink:0;
-    flex-wrap:nowrap;
-    white-space:nowrap;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; flex-wrap: nowrap;
 }
 
 .btn-back {
-  font-size: .85rem;
-  padding: 0 16px;
-  min-height: 38px;
-  width: auto;
+  font-size: .82rem; padding: 0 14px; min-height: 36px; width: auto;
 }
-
 .btn-icon {
-  width: 38px;
-  min-height: 38px;
-  padding: 0;
-  font-size: .9rem;
-  border-radius: 10px;
+  width: 36px; height: 36px; padding: 0; font-size: .9rem;
+  border-radius: var(--radius-sm); min-height: 36px;
 }
 
-.table-responsive{
-    width:100%;
-    min-width:0;
-    overflow-x:auto;
-}
-
-.table-responsive table{
-    width:100%;
-    min-width:700px;
-    border-collapse:collapse;
-    table-layout: fixed;
-}
-
-/* ====================================================================
-   SIDEBAR: lista de facturas pendientes
-   ==================================================================== */
+/* ── Sidebar (lista de pendientes) ── */
 .ver-sidebar {
   grid-area: sidebar;
-  border-bottom: 1px solid var(--glass-border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
 }
 
 .sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 8px;
   padding: 14px clamp(16px, 2.5vw, 28px) 10px;
 }
-
 .sidebar-header h2 {
-  margin-bottom: 0;
-  font-size: .78rem;
-  letter-spacing: 1px;
+  margin: 0; font-size: .78rem; font-weight: 700;
+  letter-spacing: .8px; text-transform: uppercase; color: var(--muted);
 }
 
 .badge-count {
-  background: var(--accent);
-  color: var(--bg-primary);
-  font-size: .7rem;
-  font-weight: 700;
-  border-radius: 999px;
-  padding: 1px 8px;
-  line-height: 1.6;
-  min-width: 22px;
-  text-align: center;
+  background: var(--rose);
+  color: #fff; font-size: .68rem; font-weight: 700;
+  border-radius: 999px; padding: 2px 8px;
+  min-width: 22px; text-align: center; line-height: 1.5;
 }
 
 /* Buscador */
@@ -128,565 +97,162 @@
   position: relative;
   padding: 0 clamp(16px, 2.5vw, 28px) 10px;
 }
-
 .search-icon {
   position: absolute;
   left: calc(clamp(16px, 2.5vw, 28px) + 12px);
-  top: 50%;
-  transform: translateY(-65%);
-  color: var(--text-secondary);
-  font-size: .8rem;
-  pointer-events: none;
+  top: 50%; transform: translateY(-65%);
+  color: var(--muted-2); font-size: .8rem; pointer-events: none;
 }
-
 .search-box input {
-  padding-left: 32px;
-  min-height: 38px;
-  font-size: .85rem;
-  border-radius: 8px;
+  padding-left: 32px; min-height: 36px; font-size: .85rem;
+  border-radius: var(--radius-sm);
 }
 
 /* Lista scrollable */
 .facturas-list {
-  overflow-y: auto;
-  flex: 1;
+  overflow-y: auto; flex: 1;
   padding: 0 clamp(16px, 2.5vw, 28px) 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: flex; flex-direction: column; gap: 8px;
   max-height: 260px;
 }
-
-/* Tarjeta de factura individual */
-.factura-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, .03);
-  cursor: pointer;
-  transition: background .18s ease, border-color .18s ease, transform .18s ease;
-  gap: 10px;
+.facturas-list::-webkit-scrollbar { width: 4px; }
+.facturas-list::-webkit-scrollbar-thumb {
+  background: var(--border-2); border-radius: 20px;
 }
 
+/* Tarjeta de factura en la lista */
+.factura-card {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  cursor: pointer; gap: 10px;
+  transition: background .15s, border-color .15s, transform .15s;
+}
 .factura-card:hover {
-  background: rgba(255, 255, 255, .06);
-  border-color: rgba(255, 255, 255, .14);
+  background: var(--rose-faint);
+  border-color: var(--rose-light);
   transform: translateX(2px);
 }
-
 .factura-card.activa {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  background: var(--rose-faint);
+  border-color: var(--rose);
 }
 
-.factura-card-info {
-  overflow: hidden;
-}
-
+.factura-card-info { overflow: hidden; flex: 1; }
 .factura-card-id {
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: .8rem; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
 .factura-card-meta {
-  font-size: .74rem;
-  color: var(--text-secondary);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: .73rem; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
 .factura-card-total {
-  font-size: .82rem;
-  font-weight: 600;
-  color: var(--accent);
-  flex-shrink: 0;
+  font-size: .82rem; font-weight: 600;
+  color: var(--rose-deep); flex-shrink: 0;
 }
 
-/* Estado vacío / error */
+/* Estado vacío en lista */
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 28px 20px;
-  color: var(--text-secondary);
-  font-size: .85rem;
-  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 28px 20px; color: var(--muted); font-size: .85rem; text-align: center;
 }
+.empty-state i { font-size: 1.8rem; opacity: .35; }
 
-.empty-state i {
-  font-size: 1.8rem;
-  opacity: .35;
-}
-
-/* ====================================================================
-   DETAIL: detalle de la factura seleccionada
-   ==================================================================== */
+/* ── Detail ── */
 .ver-detail {
   grid-area: detail;
   padding: clamp(16px, 2.5vw, 28px);
-  display: flex;
-  flex-direction: column;
-
-  min-width: 0;
-  overflow-x: hidden;
+  display: flex; flex-direction: column;
+  min-width: 0; overflow-x: hidden;
 }
 
-.detail-content{
-    min-width:0;
-    width:100%;
-}
+.detail-content { min-width: 0; width: 100%; }
 
-/* Placeholder cuando no hay selección */
+/* Placeholder */
 .detail-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  flex: 1;
-  color: var(--text-secondary);
-  font-size: .88rem;
-  text-align: center;
-  padding: 48px 20px;
-  opacity: .45;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; flex: 1; color: var(--muted-2);
+  font-size: .88rem; text-align: center;
+  padding: 56px 20px; opacity: .5;
 }
+.detail-empty i { font-size: 2.4rem; }
 
-.detail-empty i {
-  font-size: 2.4rem;
-}
-
-/* Encabezado del detalle */
+/* Header del detalle */
 .detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--glass-border);
+  display: flex; justify-content: space-between;
+  align-items: flex-start; gap: 12px;
+  margin-bottom: 18px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
-
 .detail-id {
-  font-size: .75rem;
-  font-weight: 600;
-  letter-spacing: 1.5px;
-  color: var(--accent);
-  text-transform: uppercase;
-  margin-bottom: 2px;
+  font-size: .7rem; font-weight: 700;
+  letter-spacing: 1.5px; color: var(--rose);
+  text-transform: uppercase; margin-bottom: 2px;
 }
-
-.detail-cliente {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-}
+.detail-cliente { font-size: 1rem; font-weight: 600; color: var(--ink); }
 
 .status-badge {
-  font-size: .7rem;
-  font-weight: 700;
-  letter-spacing: .5px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  flex-shrink: 0;
+  font-size: .68rem; font-weight: 700; letter-spacing: .5px;
+  padding: 4px 12px; border-radius: 999px;
+  text-transform: uppercase; flex-shrink: 0;
 }
-
 .status-pendiente {
-  background: rgba(251, 191, 36, .15);
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, .3);
+  background: var(--amber-bg); color: var(--amber);
+  border: 1px solid rgba(181,112,13,.2);
 }
 
-/* Grid de info del cliente */
+/* Grid de info */
 .info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 10px; margin-bottom: 20px;
 }
-
 .info-item {
-  background: rgba(255, 255, 255, .03);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 3px;
 }
-
 .info-label {
-  font-size: .7rem;
-  color: var(--text-secondary);
-  letter-spacing: .5px;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  font-size: .68rem; color: var(--muted);
+  letter-spacing: .5px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 5px;
+}
+.info-label i { font-size: .72rem; color: var(--rose); opacity: .8; }
+.info-value { font-size: .875rem; color: var(--text); font-weight: 500; }
+
+/* Tabla de productos en detalle */
+.table-responsive {
+  width: 100%; min-width: 0; overflow-x: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.table-responsive::-webkit-scrollbar { height: 4px; }
+.table-responsive::-webkit-scrollbar-thumb {
+  background: var(--border-2); border-radius: 20px;
 }
 
-.info-label i {
-  font-size: .75rem;
-  color: var(--accent);
-  opacity: .7;
+.table-responsive table {
+  width: 100%; min-width: 620px; border-collapse: collapse;
+}
+.table-responsive thead th {
+  padding: 10px 14px; font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px;
+  color: var(--muted); border-bottom: 2px solid var(--border);
+  background: var(--surface-1); text-align: left;
+}
+.table-responsive tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+.table-responsive tbody tr:hover { background: var(--rose-faint); }
+.table-responsive tbody tr:last-child { border-bottom: none; }
+.table-responsive tbody td {
+  padding: 11px 14px; font-size: .82rem; color: var(--text);
+  vertical-align: middle; white-space: nowrap;
 }
 
-.info-value {
-  font-size: .88rem;
-  color: var(--text);
-  font-weight: 500;
-}
-
-/* Totales */
-.totales-box {
-  background: rgba(255, 255, 255, .03);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: .85rem;
-  color: var(--text-secondary);
-}
-
-.total-row strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.total-highlight {
-  padding-top: 8px;
-  border-top: 1px solid var(--glass-border);
-  font-size: .95rem;
-  color: var(--text);
-}
-
-.total-highlight strong {
-  color: var(--accent);
-  font-size: 1rem;
-}
-
-/* Botón de aprobar */
-.detail-actions {
-  margin-top: 20px;
-}
-
-.btn-aprobar {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 48px;
-  border: none;
-  border-radius: 10px;
-  font-size: .95rem;
-  font-weight: 700;
-  cursor: pointer;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: white;
-  transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
-  box-shadow: 0 4px 16px rgba(34, 197, 94, .25);
-}
-
-.btn-aprobar:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(34, 197, 94, .35);
-}
-
-.btn-aprobar:active {
-  transform: scale(.98);
-}
-
-.btn-aprobar:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-/* Clase de utilidad para ocultar */
-.hidden {
-  display: none !important;
-}
-
-/* Texto de tabla vacía */
-.table-empty {
-  text-align: center;
-  color: var(--text-secondary);
-  padding: 24px;
-  font-size: .85rem;
-}
-
-.text-right {
-  text-align: right;
-}
-
-/* ====================================================================
-   MODAL DE ESTADO (mismo que en facturacion, aquí solo los que faltan)
-   ==================================================================== */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, .6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.modal-card {
-  background: var(--bg-primary);
-  padding: 30px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-  max-width: 380px;
-  width: 90%;
-  color: var(--text-secondary);
-  border: 1px solid var(--glass-border);
-}
-
-.modal-status-section p {
-  font-size: .88rem;
-}
-
-.modal-status-section h3 {
-  font-size: 1.1rem;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid rgba(255, 255, 255, .08);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  margin: 0 auto 16px;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.success-checkmark {
-  width: 58px;
-  height: 58px;
-  margin: 0 auto 14px;
-  background: #22c55e;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  animation: popIn .4s cubic-bezier(.175, .885, .32, 1.275);
-}
-
-.check-icon {
-  width: 11px;
-  height: 22px;
-  border: solid white;
-  border-width: 0 3px 3px 0;
-  transform: rotate(45deg);
-  margin-bottom: 4px;
-}
-
-.error-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-@keyframes popIn {
-  from { transform: scale(0); }
-  to   { transform: scale(1); }
-}
-
-.btn-cerrar-modal {
-  background: var(--danger);
-  color: white;
-  border: none;
-  padding: 10px 22px;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-top: 14px;
-  font-weight: 600;
-  font-size: .88rem;
-  transition: background .2s ease;
-}
-
-.btn-cerrar-modal:hover {
-  background: var(--danger-hover);
-}
-
-.modal-print-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.modal-print-actions .btn-secondary {
-  width: 100%;
-  justify-content: center;
-}
-
-.modal-print-actions.hidden {
-  display: none;
-}
-
-/* ====================================================================
-   RESPONSIVE: tablet y desktop
-   ==================================================================== */
-@media (min-width: 768px) {
-  .ver-layout {
-    grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-      "header  header"
-      "sidebar detail";
-    min-height: 100vh;
-  }
-
-  .ver-sidebar {
-    border-bottom: none;
-    border-right: 1px solid var(--glass-border);
-  }
-
-  .facturas-list {
-    max-height: none;
-    flex: 1;
-  }
-
-  .detail-empty {
-    min-height: 340px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .ver-layout {
-    grid-template-columns: 320px minmax(0, 1fr);
-  }
-
-  .info-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-/* ====================================================================
-   CRUD DE PRODUCTOS — Sección editar
-   ==================================================================== */
-.ver-crud-section,
-.ver-pago-section {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--glass-border);
-}
-
-.ver-section-title {
-  font-size: .78rem;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ver-section-title i {
-  color: var(--accent);
-  font-size: .85rem;
-}
-
-/* Formulario agregar producto dentro de verificación */
-.ver-add-form {
-  background: rgba(255,255,255,.025);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-/* Acciones de tabla (toggle + eliminar) */
-.acciones-producto {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-toggle-desc {
-  padding: 5px;
-  border: 1px solid var(--accent);
-  background: transparent;
-  color: var(--accent);
-  border-radius: 6px;
-  width: 30px;
-  height: 30px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background .15s ease, color .15s ease;
-  font-size: .8rem;
-}
-
-.btn-toggle-desc:hover,
-.btn-toggle-desc.active {
-  background: var(--accent);
-  color: #fff;
-}
-
-/* Sobrescribir btn-eliminar para que funcione dentro del ver-detail */
-.ver-detail .btn-eliminar {
-  background: none;
-  border: none;
-  color: var(--danger);
-  cursor: pointer;
-  font-size: 1rem;
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: color .2s ease, transform .2s ease;
-  padding: 0;
-}
-
-.ver-detail .btn-eliminar:hover {
-  color: var(--danger-hover);
-  transform: scale(1.15);
-}
-
-/* Anchos de columna de la tabla de verificación — idénticos a facturacion.css */
 .ver-detail table th:nth-child(1),
-.ver-detail table td:nth-child(1) { width: 65px; }
-
+.ver-detail table td:nth-child(1) { width: 60px; }
 .ver-detail table th:nth-child(2),
-.ver-detail table td:nth-child(2) { width: 230px; }
-
+.ver-detail table td:nth-child(2) { width: 200px; white-space: normal; }
 .ver-detail table th:nth-child(3),
 .ver-detail table td:nth-child(3),
 .ver-detail table th:nth-child(4),
@@ -694,104 +260,148 @@
 .ver-detail table th:nth-child(5),
 .ver-detail table td:nth-child(5),
 .ver-detail table th:nth-child(6),
-.ver-detail table td:nth-child(6) { width: 95px; text-align: right; }
-
+.ver-detail table td:nth-child(6) { width: 90px; text-align: right; }
 .ver-detail table th:nth-child(7),
-.ver-detail table td:nth-child(7) { width: 65px; text-align: center; }
+.ver-detail table td:nth-child(7) { width: 60px; text-align: center; }
 
+.table-empty { text-align: center; color: var(--muted); padding: 24px; font-size: .85rem; }
+.text-right  { text-align: right; }
 .text-center { text-align: center; }
 
-/* ====================================================================
-   MÓDULO DE PAGO en verificación
-   ==================================================================== */
-.ver-pago-section {
-  margin-bottom: 6px;
+/* Acciones de producto en tabla */
+.acciones-producto {
+  display: flex; gap: 6px; align-items: center; justify-content: center;
 }
+.btn-toggle-desc {
+  padding: 5px; border: 1px solid var(--rose);
+  background: transparent; color: var(--rose);
+  border-radius: 6px; width: 30px; height: 30px;
+  cursor: pointer; display: inline-flex; align-items: center;
+  justify-content: center; font-size: .8rem;
+  transition: background .15s, color .15s;
+}
+.btn-toggle-desc:hover, .btn-toggle-desc.active { background: var(--rose); color: #fff; }
+.ver-detail .btn-eliminar {
+  background: none; border: none; color: var(--danger); cursor: pointer;
+  font-size: 1rem; width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px; padding: 0;
+  transition: color .2s, transform .2s;
+}
+.ver-detail .btn-eliminar:hover { color: var(--danger-hover); transform: scale(1.12); }
 
+/* Totales */
+.totales-box {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+  margin-top: 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.total-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .875rem; color: var(--muted);
+}
+.total-row strong { color: var(--text); font-weight: 600; }
+.total-highlight {
+  padding-top: 8px; border-top: 1px solid var(--border);
+  font-size: .95rem; color: var(--text);
+}
+.total-highlight strong { color: var(--rose-deep); font-size: 1rem; }
+
+/* Secciones CRUD + Pago */
+.ver-crud-section, .ver-pago-section {
+  margin-top: 22px; padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.ver-section-title {
+  font-size: .72rem; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+.ver-section-title i { color: var(--rose); font-size: .85rem; }
+
+/* Formulario agregar producto */
+.ver-add-form {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  display: grid; grid-template-columns: 1fr; gap: 14px;
+}
+.form-actions-row { grid-column: 1 / -1; }
+
+/* Sección de pago */
 .ver-pago-form {
-  background: rgba(255,255,255,.025);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
 }
-
-/* Grilla interna del pago (hereda form-billing-grid de facturacion.css) */
 #verPaymentDetails {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+  display: grid; grid-template-columns: 1fr; gap: 14px;
 }
-
-@media (min-width: 600px) {
-  #verPaymentDetails {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.ver-pago-form textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--text); font-family: 'Inter', sans-serif;
+  font-size: .875rem; resize: vertical; min-height: 72px;
+  transition: border-color .15s, box-shadow .15s;
 }
-
-/* Reutilizar estilos de captura de comprobante de facturacion.css */
-.capture-label {
-  font-size: .82rem;
-  color: var(--text-secondary);
+.ver-pago-form textarea:focus {
+  border-color: var(--rose); box-shadow: 0 0 0 3px rgba(192,82,122,.12);
+  outline: none;
 }
-
-.btn-capture {
-  width: auto;
-  min-height: 40px;
-  font-size: .85rem;
-  padding: 0 18px;
-  align-self: flex-start;
-}
-
+.capture-label { font-size: .82rem; color: var(--muted); }
 .receipt-preview-box {
-  width: 100%;
-  min-height: 140px;
-  border-radius: 8px;
-  border: 1px dashed rgba(255,255,255,.2);
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-color: rgba(255,255,255,.03);
+  width: 100%; min-height: 130px; border-radius: 8px;
+  border: 1px dashed var(--border-2);
+  background-size: contain; background-repeat: no-repeat;
+  background-position: center; background-color: var(--surface-1);
   margin-top: 4px;
 }
 
-/* textarea dentro del pago */
-.ver-pago-form textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 10px;
-  outline: none;
-  background: rgba(255,255,255,.05);
-  color: var(--text);
-  font-size: .88rem;
-  font-family: 'Poppins', sans-serif;
-  resize: vertical;
-  transition: outline .2s ease, background .2s ease;
-  min-height: 72px;
+/* Botón aprobar */
+.detail-actions { margin-top: 20px; }
+.btn-aprobar {
+  display: flex; justify-content: center; align-items: center;
+  gap: 10px; width: 100%; min-height: 48px;
+  border: none; border-radius: 10px;
+  font-size: .95rem; font-weight: 700; cursor: pointer;
+  background: linear-gradient(135deg, var(--success), #16a34a);
+  color: white;
+  box-shadow: 0 4px 16px rgba(45,125,82,.25);
+  transition: transform .2s var(--ease), box-shadow .2s, opacity .2s;
+}
+.btn-aprobar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(45,125,82,.35);
+}
+.btn-aprobar:active { transform: scale(.98); }
+.btn-aprobar:disabled {
+  opacity: .5; cursor: not-allowed; transform: none; box-shadow: none;
 }
 
-.ver-pago-form textarea:focus {
-  outline: 2px solid var(--accent);
-  background: rgba(255,255,255,.08);
-}
-
-.ver-pago-form textarea::placeholder {
-  color: var(--text-secondary);
-  opacity: .6;
-}
-
-/* Formulario de agregar producto: grid responsive */
+/* ── Responsive ── */
 @media (min-width: 600px) {
-  .ver-add-form.form-billing-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .ver-add-form { grid-template-columns: repeat(2, 1fr); }
+  #verPaymentDetails { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 768px) {
+  .main-card.ver-layout {
+    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "header  header"
+      "sidebar detail";
+    min-height: calc(100dvh - 56px);
   }
+  .ver-sidebar { border-bottom: none; border-right: 1px solid var(--border); }
+  .facturas-list { max-height: none; }
+  .detail-empty { min-height: 340px; }
 }
 
 @media (min-width: 900px) {
-  .ver-add-form.form-billing-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
+  .ver-add-form { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (min-width: 1024px) {
+  .main-card.ver-layout { grid-template-columns: 320px minmax(0, 1fr); }
+  .info-grid { grid-template-columns: repeat(4, 1fr); }
 }

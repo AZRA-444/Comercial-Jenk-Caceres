@@ -1,129 +1,108 @@
 /* ============================================================
-   HOME.CSS
-   Pantalla de inicio (index.html). Mobile-first.
+   HOME.CSS — Pantalla de inicio. Mobile-first.
    ============================================================ */
 
 body:has(.card-content) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100dvh;
+  padding: clamp(20px, 4vw, 48px);
+  gap: clamp(24px, 4vw, 40px);
+  background: var(--surface-1);
+}
+
+/* ── Hero ── */
+.home-hero {
   text-align: center;
-  gap: clamp(20px, 4vw, 40px);
+  max-width: 560px;
 }
 
-body:has(.card-content) .invoice-header {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-  align-items: center;
+.home-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .7rem; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--rose); background: var(--rose-faint);
+  padding: 4px 14px; border-radius: 20px;
+  margin-bottom: 14px;
 }
 
-body:has(.card-content) .invoice-header h1 {
-  font-size: clamp(1.6rem, 1.2rem + 2vw, 2.6rem);
+.home-hero h1 {
+  font-size: clamp(1.6rem, 1.2rem + 2vw, 2.4rem);
+  font-weight: 700; color: var(--ink); line-height: 1.15;
+  margin-bottom: 8px;
 }
 
+.home-hero p {
+  font-size: .9rem; color: var(--muted);
+}
+
+/* ── Grid de tarjetas ── */
 .card-content {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
-
   width: 100%;
   max-width: var(--content-width);
-
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius);
-
-  padding: clamp(20px, 3vw, 32px);
-  box-shadow: var(--shadow);
-  overflow: hidden;
 }
 
 .card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 4px;
-  padding: 22px 18px;
-  border-radius: var(--radius);
-  background: white;
-  color: var(--text-secondary);
+  display: flex; flex-direction: column;
+  align-items: flex-start; gap: 12px;
+  padding: 24px 22px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
   text-decoration: none;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-  transition: transform .25s var(--ease), box-shadow .25s var(--ease), background .25s var(--ease);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s;
 }
 
-.card:hover,
-.card:focus-visible {
-  transform: translateY(-4px);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.14);
-  background: #fdfdfd;
+.card:hover, .card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--rose-light);
 }
+.card:active { transform: translateY(-1px) scale(.99); }
 
-.card:active {
-  transform: translateY(-1px) scale(.98);
-}
-
-.card i {
-  font-size: 26px;
-  margin-bottom: 6px;
-  color: var(--text-secondary);
-  transition: transform .3s var(--ease);
-}
-
-.card:hover i {
-  transform: scale(1.12) rotate(-4deg);
+.card-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: var(--rose-faint);
+  color: var(--rose-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem;
 }
 
 .card h2 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-  color: #1f2937;
+  font-size: 1rem; font-weight: 600;
+  color: var(--ink); margin: 0;
+  text-transform: none; letter-spacing: 0;
 }
 
-/* ---------- Tablet: dos columnas ---------- */
+.card p {
+  font-size: .8rem; color: var(--muted);
+  line-height: 1.45; margin: 0;
+}
+
+/* ── Tablet: 2 columnas ── */
 @media (min-width: 560px) {
-  .card-content {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .card-content { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ---------- Laptop / Desktop: tres columnas y más aire ---------- */
+/* ── Desktop: 4 columnas ── */
 @media (min-width: 900px) {
-  :root {
-    --content-width: 960px;
-  }
-
-  .card-content {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-    padding: 40px;
-  }
-
-  .card {
-    padding: 32px 22px;
-  }
-
-  .card i {
-    font-size: 32px;
-  }
-
-  .card h2 {
-    font-size: 1.1rem;
-  }
+  :root { --content-width: 940px; }
+  .card-content { grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .card { padding: 28px 22px; }
 }
 
-/* ---------- Desktop grande: todavía más espacio de respiro ---------- */
-@media (min-width: 1280px) {
-  :root {
-    --content-width: 1100px;
-  }
+/* ── Invoice header (legado usado en index) ── */
+body:has(.card-content) .invoice-header {
+  border-bottom: none; margin-bottom: 0; padding-bottom: 0;
+  align-items: center;
+}
+
+body:has(.card-content) .invoice-header h1 {
+  font-size: clamp(1.5rem, 1.2rem + 1.5vw, 2.2rem);
 }

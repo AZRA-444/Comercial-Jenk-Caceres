@@ -1,127 +1,317 @@
 /* ============================================================
-   GLOBAL.CSS
-   Fuente única de verdad para variables, reset y base.
-   Mobile-first: todo lo de aquí es la base para pantallas
-   pequeñas; los demás archivos escalan hacia arriba con
-   min-width.
+   GLOBAL.CSS — Comercial Jenk Cáceres — Redesign 2026
+   Paleta: Rosa-burdeos desaturado + tinta oscura (del logo).
+   Mobile-first. Todo lo de aquí es la base; los demás módulos
+   escalan hacia arriba con min-width.
    ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --bg-primary: #0b0f17;
-  --bg-secondary: #1e1e2f;
+  /* ── Colores de marca (logo) ── */
+  --rose:        #c0527a;
+  --rose-light:  #e8a0b8;
+  --rose-faint:  #f7eaf0;
+  --rose-deep:   #8c3357;
+  --rose-hover:  #a8406a;
 
-  --glass-bg: rgba(255, 255, 255, .04);
-  --glass-border: rgba(255, 255, 255, .08);
+  --ink:         #1a1218;
+  --ink-2:       #2d1f27;
+  --ink-3:       #3f2c38;
+  --muted:       #7a6670;
+  --muted-2:     #9e8b96;
 
-  --text: #f3f4f6;
-  --text-secondary: #9ca3af;
+  /* ── Superficies ── */
+  --surface:     #ffffff;
+  --surface-1:   #faf4f7;
+  --surface-2:   #f2e8ee;
+  --border:      #e0d4da;
+  --border-2:    #c8b8c2;
 
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, .12);
-  --danger: #ef4444;
-  --danger-hover: #cc0000;
+  --text:        #1a1218;
+  --text-secondary: #7a6670;
 
-  --radius: 16px;
-  --radius-sm: 10px;
+  /* ── Semánticos ── */
+  --success:     #2d7d52;
+  --success-bg:  #e8f5ee;
+  --danger:      #c0392b;
+  --danger-hover:#a3291c;
+  --danger-bg:   #fcecea;
+  --amber:       #b5700d;
+  --amber-bg:    #fef3e0;
 
-  --shadow: 0 8px 32px rgba(0, 0, 0, .35);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, .45);
-
-  /* Contenedor: crece con la pantalla en vez de saltar de golpe */
-  --content-width: min(100%, 900px);
-
-  /* Tipografía fluida: se ajusta sola entre mobile y desktop */
-  --fs-h1: clamp(1.4rem, 1.1rem + 1.3vw, 2rem);
-  --fs-h2: clamp(.85rem, .8rem + .2vw, .95rem);
-  --fs-body: clamp(.9rem, .87rem + .12vw, 1rem);
+  /* ── Efectos ── */
+  --radius:      10px;
+  --radius-sm:   6px;
+  --shadow:      0 1px 4px rgba(26,18,24,.07), 0 4px 16px rgba(26,18,24,.05);
+  --shadow-md:   0 2px 8px rgba(26,18,24,.1), 0 8px 32px rgba(26,18,24,.08);
+  --shadow-lg:   0 4px 16px rgba(26,18,24,.14), 0 16px 48px rgba(26,18,24,.12);
 
   --ease: cubic-bezier(.25, 1, .5, 1);
+
+  /* ── Tipografía fluida ── */
+  --fs-h1:   clamp(1.3rem, 1.1rem + 1vw, 1.9rem);
+  --fs-h2:   clamp(.8rem, .78rem + .15vw, .9rem);
+  --fs-body: clamp(.875rem, .86rem + .08vw, .95rem);
+
+  --content-width: min(100%, 960px);
 }
 
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+*, *::before, *::after {
+  margin: 0; padding: 0; box-sizing: border-box;
 }
 
-html {
-  font-size: 16px;
-  scroll-behavior: smooth;
-}
+html { font-size: 16px; scroll-behavior: smooth; }
 
 body {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   min-height: 100dvh;
-  background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+  background: var(--surface-1);
   color: var(--text);
-  line-height: 1.5;
-
-  /* Padding fluido: respira más en tablet/desktop sin medias queries extra */
-  padding: clamp(16px, 3vw, 40px);
+  line-height: 1.55;
   overflow-x: hidden;
 }
 
-img,
-svg {
-  display: block;
-  max-width: 100%;
-}
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; }
 
-a {
-  color: inherit;
-}
-
-/* Accesibilidad: foco visible consistente en toda la app */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--rose);
   outline-offset: 2px;
 }
 
-/* Respeta a quienes prefieren menos movimiento */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
   }
 }
 
-/* ==========================================================================
-   UTILIDADES DE ANIMACIÓN REUTILIZABLES
-========================================================================== */
+/* ── Animaciones reutilizables ── */
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes popIn {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
 }
 
-.fade-in-up {
-  animation: fadeInUp .5s var(--ease) both;
-}
+.fade-in-up { animation: fadeInUp .4s var(--ease) both; }
 
-/* Aplica un pequeño relevo (stagger) a hijos directos, útil para
-   listas de tarjetas o secciones que quieres que entren en cascada */
-.stagger > * {
-  animation: fadeInUp .5s var(--ease) both;
-}
-
+.stagger > * { animation: fadeInUp .45s var(--ease) both; }
 .stagger > *:nth-child(1) { animation-delay: .03s; }
 .stagger > *:nth-child(2) { animation-delay: .09s; }
 .stagger > *:nth-child(3) { animation-delay: .15s; }
 .stagger > *:nth-child(4) { animation-delay: .21s; }
-.stagger > *:nth-child(5) { animation-delay: .27s; }
+
+/* ── Utilidades globales ── */
+.hidden { display: none !important; }
+.num    { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: .7rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px;
+  white-space: nowrap;
+}
+.badge-rose    { background: var(--rose-faint);  color: var(--rose-deep); }
+.badge-success { background: var(--success-bg);  color: var(--success);   }
+.badge-amber   { background: var(--amber-bg);    color: var(--amber);     }
+.badge-muted   { background: var(--surface-2);   color: var(--muted);     }
+
+/* ── Tags de método de pago ── */
+.tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px;
+  background: var(--rose-faint); color: var(--rose-deep);
+  white-space: nowrap;
+}
+.tag.pend { background: var(--amber-bg); color: var(--amber); }
+
+/* ── Botones unificados ── */
+.btn,
+.btn-primary,
+.btn-secondary,
+button.process {
+  display: inline-flex; justify-content: center; align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border: none; border-radius: var(--radius-sm);
+  font-family: 'Inter', sans-serif;
+  font-size: .875rem; font-weight: 500;
+  cursor: pointer; text-decoration: none;
+  transition: background .15s, transform .12s, box-shadow .15s;
+}
+.btn:active,
+.btn-primary:active,
+.btn-secondary:active,
+button.process:active { transform: scale(.98); }
+
+/* Primario */
+.btn-primary,
+button.process {
+  background: var(--rose);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(192,82,122,.25);
+}
+.btn-primary:hover,
+button.process:hover {
+  background: var(--rose-hover);
+  box-shadow: 0 2px 8px rgba(192,82,122,.35);
+  transform: translateY(-1px);
+}
+
+/* Secundario */
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border-2);
+}
+.btn-secondary:hover {
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+/* Ghost */
+.btn.ghost,
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn.ghost:hover,
+.btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+
+/* Peligro */
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: var(--danger-hover); }
+
+/* Tamaños */
+.btn.small, .btn-sm { padding: 6px 12px; font-size: .78rem; }
+.btn-icon   { padding: 7px; width: 32px; height: 32px; justify-content: center; }
+
+/* Eliminar (legado) */
+.btn-eliminar {
+  background: none; border: none;
+  color: var(--danger); cursor: pointer;
+  font-size: 1rem; width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  transition: color .2s, transform .2s;
+}
+.btn-eliminar:hover { color: var(--danger-hover); transform: scale(1.12); }
+
+/* ── Formularios ── */
+input, select, textarea {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  font-family: 'Inter', sans-serif;
+  font-size: .875rem; color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(192,82,122,.12);
+}
+input[readonly]  { background: var(--surface-2); cursor: not-allowed; color: var(--muted); }
+input[disabled]  { opacity: .5; cursor: not-allowed; }
+
+select {
+  cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a6670' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+select option { background: var(--surface); color: var(--text); }
+
+textarea { resize: vertical; min-height: 90px; }
+textarea::placeholder { color: var(--muted-2); opacity: .7; }
+
+/* ── form-field label (legado) ── */
+.form-field {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: .78rem; color: var(--muted); width: 100%;
+}
+
+/* ── Spinner ── */
+.spinner {
+  width: 44px; height: 44px;
+  border: 4px solid var(--surface-2);
+  border-top-color: var(--rose);
+  border-radius: 50%; margin: 0 auto 14px;
+  animation: spin .9s linear infinite;
+}
+
+/* ── Modales de estado ── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(26,18,24,.55);
+  backdrop-filter: blur(4px);
+  display: flex; justify-content: center; align-items: center;
+  z-index: 9999; padding: 20px;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 28px;
+  text-align: center;
+  max-width: 380px; width: 100%;
+  box-shadow: var(--shadow-lg);
+  color: var(--muted);
+}
+
+.modal-status-section {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.modal-status-section h3 { font-size: 1.1rem; color: var(--ink); }
+.modal-status-section p  { font-size: .85rem; }
+
+.success-checkmark {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--success-bg);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+  animation: popIn .4s cubic-bezier(.175,.885,.32,1.275);
+}
+.check-icon {
+  width: 11px; height: 22px;
+  border: solid var(--success); border-width: 0 3px 3px 0;
+  transform: rotate(45deg); margin-bottom: 4px;
+}
+
+.error-icon { font-size: 46px; margin-bottom: 10px; }
+
+.btn-cerrar-modal {
+  background: var(--danger); color: #fff; border: none;
+  padding: 10px 22px; border-radius: 8px; cursor: pointer;
+  margin-top: 12px; font-weight: 600; font-size: .875rem;
+  transition: background .2s;
+}
+.btn-cerrar-modal:hover { background: var(--danger-hover); }
+
+.modal-print-actions {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 12px;
+  width: 100%;
+}
+.modal-print-actions .btn-secondary { width: 100%; justify-content: center; }
+.modal-print-actions.hidden { display: none; }
