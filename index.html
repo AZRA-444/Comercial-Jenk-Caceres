@@ -1,52 +1,107 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="assets/css/main.css" />
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="assets/css/main.css"/>
+  <title>Comercial Jenk Cáceres — Sistema</title>
+  <style>
+    body {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100dvh;
+      padding: clamp(20px, 4vw, 48px);
+      gap: 32px;
+    }
+    .home-hero { text-align: center; max-width: 480px; }
+    .home-eyebrow {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .68rem; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--rose); background: var(--rose-faint);
+      padding: 4px 14px; border-radius: 20px; margin-bottom: 14px;
+    }
+    .home-hero h1 {
+      font-size: clamp(1.6rem, 1.2rem + 2vw, 2.2rem);
+      font-weight: 700; color: var(--ink); line-height: 1.15; margin-bottom: 8px;
+    }
+    .home-hero p { font-size: .9rem; color: var(--muted); }
 
-    <title>Sistema de Facturacion</title>
-  </head>
-  <body>
-    <header class="invoice-header">
-      <h1>Comercial Jenk Caceres</h1>
-    </header>
-    <main>
-      <div class="card-content stagger">
-        <a class="card" href="assets/pages/facturacion.html">
-          <h2>Nueva Compra
-          <i class="fa-solid fa-cart-shopping"></i>
-          </h2>
-        </a>
+    .card-content {
+      display: grid; grid-template-columns: 1fr;
+      gap: 14px; width: 100%;
+      max-width: min(100%, 900px);
+    }
+    @media (min-width: 480px) {
+      .card-content { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    }
+    @media (min-width: 860px) {
+      .card-content { grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    }
 
-        <a class="card" href="assets/pages/verificacion.html">
-          <h2>Verificación
-          <i class="fa-solid fa-square-check"></i>
-          </h2>
-        </a>
+    .card {
+      display: flex; flex-direction: column;
+      align-items: flex-start; gap: 12px;
+      padding: 24px 20px; border-radius: 14px;
+      background: var(--surface); color: var(--text);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s;
+    }
+    .card:hover, .card:focus-visible {
+      transform: translateY(-3px); box-shadow: var(--shadow-md);
+      border-color: var(--rose-light);
+    }
+    .card:active { transform: translateY(-1px) scale(.99); }
 
-        <a class="card" href="assets/pages/historial.html">
-          <h2>Facturas Recientes
-          <i class="fas fa-receipt icon-default"></i>
-          </h2>
-        </a>
-        <a class="card" href="assets/pages/administrador.html">
-          <h2>Administrador
-            <i class="fas fa-user-shield"></i>
-          </h2>
-          
-        </a>
-      </div>
-    </main>
-  </body>
+    .card-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: var(--rose-faint); color: var(--rose-deep);
+      display: flex; align-items: center; justify-content: center; font-size: 1.15rem;
+    }
+    .card h2 {
+      font-size: 1rem; font-weight: 600; color: var(--ink); margin: 0;
+      text-transform: none; letter-spacing: 0;
+    }
+    .card p { font-size: .78rem; color: var(--muted); line-height: 1.45; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="home-hero fade-in-up">
+    <span class="home-eyebrow"><i class="fas fa-paw"></i> Panel de control</span>
+    <h1>Comercial Jenk Cáceres</h1>
+    <p>Sistema de gestión comercial. Selecciona una sección para comenzar.</p>
+  </div>
+
+  <div class="card-content stagger">
+    <a class="card" href="assets/pages/facturacion.html">
+      <div class="card-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+      <h2>Nueva venta</h2>
+      <p>Registra productos y genera facturas al instante.</p>
+    </a>
+
+    <a class="card" href="assets/pages/verificacion.html">
+      <div class="card-icon"><i class="fa-solid fa-square-check"></i></div>
+      <h2>Verificación</h2>
+      <p>Confirma pagos y cierra comprobantes pendientes.</p>
+    </a>
+
+    <a class="card" href="assets/pages/historial.html">
+      <div class="card-icon"><i class="fas fa-receipt"></i></div>
+      <h2>Facturas de hoy</h2>
+      <p>Revisa las transacciones del día actual.</p>
+    </a>
+
+    <a class="card" href="assets/pages/administrador.html">
+      <div class="card-icon"><i class="fas fa-chart-bar"></i></div>
+      <h2>Administrador</h2>
+      <p>Estadísticas, ventas del mes y comisiones.</p>
+    </a>
+  </div>
+</body>
 </html>
