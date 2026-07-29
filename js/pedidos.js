@@ -1,29 +1,43 @@
-// ============================================================
-// PEDIDOS.JS — Módulo de registro de ventas por pedidos.
-// Permite manejar múltiples pedidos simultáneamente, con vista
-// previa tipo WhatsApp del resumen, tasa de cambio conectada a
-// la API cambiaria, y envío al backend como "factura temporal"
-// para su verificación en el módulo de facturación. Si el envío
-// falla (sin conexión, error del servidor), el pedido se guarda
-// en localStorage y se reintenta automáticamente más adelante.
-// ============================================================
+// ---------------------------------------------------------------------------
+// Filtrado y formateo de datos en vivo (mientras el usuario escribe)
+// ---------------------------------------------------------------------------
+
+function formatText(input) {
+  let valor = input.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ ]/g, "");
+  input.value = valor
+    .split(" ")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatDoc(input) {
+  let valor = input.value.replace(/\D/g, "");
+  if (!valor) {
+    input.value = "";
+    return;
+  }
+  input.value = new Intl.NumberFormat("es-VE").format(parseInt(valor, 10));
+}
+
+function formatPhone(input) {
+  let telefono = input.value.replace(/\D/g, "");
+  if (telefono.length > 4 && telefono.length <= 7) {
+    telefono = telefono.slice(0, 4) + "-" + telefono.slice(4);
+  } else if (telefono.length > 7) {
+    telefono =
+      telefono.slice(0, 4) +
+      "-" +
+      telefono.slice(4, 7) +
+      "-" +
+      telefono.slice(7, 11);
+  }
+  input.value = telefono;
+}
 
 // ---------------------------------------------------------------------------
 // Estado del módulo
 // ---------------------------------------------------------------------------
 
-/**
- * Lista de pedidos activos en sesión.
- * Cada pedido tiene la forma:
- * {
- *   id:         string,        // "Pedido #1", "Pedido #2", etc.
- *   idFactura:  string|null,   // ID generado al enviar a facturación (se conserva entre reintentos)
- *   cliente:    { nombre, apellido, cedula, telefono, vendedor },
- *   productos:  [{ nombre, cantidad, precioUnitario, precioTotal, excluidoDescuento }],
- *   tasaCambio: number,
- *   totales:    { subtotalUSD, descuentoUSD, totalUSD, totalBS }
- * }
- */
 let _pedidos       = [];
 let _pedidoActual  = null;  // referencia directa al objeto en _pedidos
 let _contadorPedidos = 0;
@@ -32,14 +46,11 @@ let _contadorPedidos = 0;
 // Configuración: backend de facturación y almacenamiento local
 // ---------------------------------------------------------------------------
 
-/** Mismo endpoint que usa facturacion.js: guarda la factura como "temporal"
- *  en Supabase, pendiente de verificación en el módulo de facturación. */
 const BACKEND_API_URL = "/api/precargar-factura";
 
-/** Clave de localStorage donde se guardan en cola las facturas que no se
- *  pudieron enviar al backend (sin conexión, error del servidor, etc.),
- *  para poder reintentar su envío más tarde sin perder el pedido. */
 const PEDIDOS_PENDIENTES_LS_KEY = "pedidosFacturasPendientes";
+
+const PEDIDOS_BORRADOR_LS_KEY = "pedidosBorradorActivos";
 
 // ---------------------------------------------------------------------------
 // Inicialización
@@ -67,17 +78,42 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnNuevoPedido')
     .addEventListener('click', pedNuevoPedido);
 
-  // Restaurar tasa de cambio guardada (mientras se consulta la API en segundo plano)
-  const tasaGuardada = localStorage.getItem('pedidosTasaCambio');
-  if (tasaGuardada) {
-    document.getElementById('pedTasaInput').value = tasaGuardada;
+  // --- Formateo en vivo + sincronización + autoguardado de los campos del cliente ---
+  const inputNombre   = document.getElementById('pedNombre');
+  const inputApellido = document.getElementById('pedApellido');
+  const inputCedula   = document.getElementById('pedCedula');
+  const inputTelefono = document.getElementById('pedTelefono');
+  const inputVendedor = document.getElementById('pedVendedor');
+
+  const onCampoClienteInput = (formateador) => (e) => {
+    if (formateador) formateador(e.target);
+    pedSyncCliente();
+    _guardarBorradorLocalDebounced();
+  };
+
+  inputNombre?.addEventListener('input',   onCampoClienteInput(formatText));
+  inputApellido?.addEventListener('input', onCampoClienteInput(formatText));
+  inputVendedor?.addEventListener('input', onCampoClienteInput(formatText));
+  inputCedula?.addEventListener('input',   onCampoClienteInput(formatDoc));
+  inputTelefono?.addEventListener('input', onCampoClienteInput(formatPhone));
+
+  document.getElementById('pedTasaInput')
+    ?.addEventListener('input', () => _guardarBorradorLocalDebounced());
+
+  // --- Restaurar pedidos en curso guardados por autoguardado, si existen ---
+  const restaurado = _restaurarBorradorLocal();
+
+  if (!restaurado) {
+    // Restaurar vendedor guardado
+    const vendedorGuardado = localStorage.getItem('vendedorActual');
+    // Crear primer pedido automáticamente
+    _crearPedido(vendedorGuardado || '');
   }
 
-  // Restaurar vendedor guardado
-  const vendedorGuardado = localStorage.getItem('vendedorActual');
-
-  // Crear primer pedido automáticamente
-  _crearPedido(vendedorGuardado || '');
+  const tasaGuardada = localStorage.getItem('pedidosTasaCambio');
+  if (tasaGuardada && (!_pedidoActual?.tasaCambio || _pedidoActual.tasaCambio === 1)) {
+    document.getElementById('pedTasaInput').value = tasaGuardada;
+  }
 
   // Consultar la tasa de cambio actual en la API (no bloquea la carga)
   obtenerTasaDolarPedidos(document.getElementById('pedTasaInput'));
@@ -86,6 +122,19 @@ document.addEventListener('DOMContentLoaded', () => {
   _actualizarBannerPendientes();
   pedReintentarPendientes();
   window.addEventListener('online', pedReintentarPendientes);
+
+  // --- Advertir antes de recargar/cerrar si hay datos sin enviar ---
+  window.addEventListener('beforeunload', (e) => {
+    // Aseguramos que quede guardado lo último escrito, aunque el debounce
+    // todavía no se haya disparado.
+    clearTimeout(_debounceGuardarBorrador);
+    _guardarBorradorLocal();
+
+    if (!_hayDatosSinEnviar()) return;
+    e.preventDefault();
+    e.returnValue = ''; // Requerido por Chrome/Firefox para mostrar el diálogo nativo
+    return '';
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -119,6 +168,7 @@ function _crearPedido(vendedorInicial = '', tasaInicial = 1) {
   _pedidos.push(pedido);
   _renderizarListaSidebar();
   _seleccionarPedido(pedido);
+  _guardarBorradorLocal();
 }
 
 /** Eliminar un pedido de la lista */
@@ -132,6 +182,7 @@ function pedEliminarPedido(id, e) {
     _pedidoActual.totales    = { subtotalUSD:0, descuentoUSD:0, totalUSD:0, totalBS:0 };
     _cargarPedidoEnFormulario(_pedidoActual);
     _renderizarListaSidebar();
+    _guardarBorradorLocal();
     return;
   }
 
@@ -148,6 +199,7 @@ function pedEliminarPedido(id, e) {
   } else {
     _renderizarListaSidebar();
   }
+  _guardarBorradorLocal();
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +333,7 @@ function pedActualizarTasa(valor) {
   _pedidoActual.tasaCambio = tasa;
   localStorage.setItem('pedidosTasaCambio', tasa);
   _renderizarTabla();
+  _guardarBorradorLocal();
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +367,7 @@ function pedAgregarProducto() {
   document.querySelectorAll('.pedido-card').forEach(el =>
     el.classList.toggle('activa', el.dataset.id === _pedidoActual.id)
   );
+  _guardarBorradorLocal();
 }
 
 function _manejarClickTabla(e) {
@@ -326,6 +380,7 @@ function _manejarClickTabla(e) {
     document.querySelectorAll('.pedido-card').forEach(el =>
       el.classList.toggle('activa', el.dataset.id === _pedidoActual.id)
     );
+    _guardarBorradorLocal();
     return;
   }
 
@@ -336,6 +391,7 @@ function _manejarClickTabla(e) {
     if (p) {
       p.excluidoDescuento = !p.excluidoDescuento;
       _renderizarTabla();
+      _guardarBorradorLocal();
     }
   }
 }
@@ -528,6 +584,93 @@ function pedRefrescarTasa() {
 }
 
 // ---------------------------------------------------------------------------
+// 8b-bis. Autoguardado de borrador (evitar perder pedidos en curso)
+// ---------------------------------------------------------------------------
+// A diferencia de la cola de "pendientes" (8c), que solo guarda facturas que
+// YA se intentaron enviar y fallaron, esto guarda TODO lo que el usuario va
+// escribiendo en pantalla —incluso pedidos que ni siquiera se han intentado
+// enviar— para poder recuperarlos si la página se recarga o se cierra sin
+// querer, se corta la luz/conexión, etc.
+
+/** Serializa y guarda en localStorage el estado completo de los pedidos
+ *  activos en sesión (todos los de la sidebar), incluyendo el que se está
+ *  editando ahora mismo en el formulario. */
+function _guardarBorradorLocal() {
+  try {
+    if (_pedidoActual) _guardarEstadoFormulario(_pedidoActual);
+
+    const estado = {
+      pedidos: _pedidos,
+      contadorPedidos: _contadorPedidos,
+      pedidoActualId: _pedidoActual?.id || null,
+    };
+    localStorage.setItem(PEDIDOS_BORRADOR_LS_KEY, JSON.stringify(estado));
+  } catch (err) {
+    console.warn('No se pudo guardar el borrador de pedidos en localStorage:', err);
+  }
+}
+
+/** Elimina el borrador guardado (se llama una vez que ya no hace falta,
+ *  por ejemplo si el usuario limpia todo manualmente). */
+function _borrarBorradorLocal() {
+  localStorage.removeItem(PEDIDOS_BORRADOR_LS_KEY);
+}
+
+/** Versión con debounce de _guardarBorradorLocal, pensada para usarse en
+ *  eventos que disparan muy seguido (como "input" al escribir), para no
+ *  golpear localStorage en cada tecla. */
+let _debounceGuardarBorrador = null;
+function _guardarBorradorLocalDebounced(delayMs = 400) {
+  clearTimeout(_debounceGuardarBorrador);
+  _debounceGuardarBorrador = setTimeout(_guardarBorradorLocal, delayMs);
+}
+
+/** Restaura los pedidos guardados por el autoguardado, si hay alguno con
+ *  datos reales (para no "revivir" pedidos vacíos sin sentido).
+ *  Devuelve true si restauró algo, false si no había nada que restaurar. */
+function _restaurarBorradorLocal() {
+  let estado;
+  try {
+    estado = JSON.parse(localStorage.getItem(PEDIDOS_BORRADOR_LS_KEY));
+  } catch {
+    estado = null;
+  }
+
+  if (!estado || !Array.isArray(estado.pedidos) || estado.pedidos.length === 0) {
+    return false;
+  }
+
+  const tieneDatos = estado.pedidos.some(p =>
+    (p.productos && p.productos.length > 0) ||
+    Object.values(p.cliente || {}).some(v => (v || '').trim() !== '')
+  );
+  if (!tieneDatos) return false;
+
+  _pedidos = estado.pedidos;
+  _contadorPedidos = estado.contadorPedidos || _pedidos.length;
+
+  _renderizarListaSidebar();
+
+  const pedidoARestaurar =
+    _pedidos.find(p => p.id === estado.pedidoActualId) || _pedidos[0];
+  _seleccionarPedido(pedidoARestaurar);
+
+  return true;
+}
+
+/** Indica si hay algo que se perdería al cerrar/recargar la página ahora
+ *  mismo: pedidos en curso con datos, o facturas que fallaron al enviarse
+ *  y siguen en cola. Se usa para el aviso de "beforeunload". */
+function _hayDatosSinEnviar() {
+  const hayPedidosConDatos = _pedidos.some(p =>
+    (p.productos && p.productos.length > 0) ||
+    Object.values(p.cliente || {}).some(v => (v || '').trim() !== '')
+  );
+  const hayPendientes = _obtenerPendientesLocal().length > 0;
+  return hayPedidosConDatos || hayPendientes;
+}
+
+// ---------------------------------------------------------------------------
 // 8c. Cola de facturas pendientes en localStorage
 // ---------------------------------------------------------------------------
 
@@ -701,6 +844,7 @@ function _quitarPedidoDeListaActiva(id) {
   } else {
     _renderizarListaSidebar();
   }
+  _guardarBorradorLocal();
 }
 
 async function _enviarFacturaAlBackend(payload, pedidoId) {
@@ -742,6 +886,46 @@ async function _enviarFacturaAlBackend(payload, pedidoId) {
   }
 }
 
+/** Valida que TODOS los campos obligatorios del pedido estén completos y con
+ *  un formato correcto antes de poder enviarlo a facturación. Devuelve un
+ *  mensaje de error (string) si algo falta, o null si todo está en orden. */
+function _validarCamposObligatorios(pedido) {
+  const c = pedido.cliente;
+
+  if (!pedido.productos.length) {
+    return 'Agrega al menos un producto antes de enviar el pedido.';
+  }
+
+  if (!c.nombre.trim()) {
+    return 'El nombre del cliente es obligatorio.';
+  }
+  if (!c.apellido.trim()) {
+    return 'El apellido del cliente es obligatorio.';
+  }
+
+  const cedulaDigitos = (c.cedula || '').replace(/\D/g, '');
+  if (!cedulaDigitos) {
+    return 'La cédula del cliente es obligatoria.';
+  }
+  if (cedulaDigitos.length < 6 || cedulaDigitos.length > 9) {
+    return 'La cédula ingresada no es válida (debe tener entre 6 y 9 dígitos).';
+  }
+
+  const telefonoDigitos = (c.telefono || '').replace(/\D/g, '');
+  if (!telefonoDigitos) {
+    return 'El teléfono del cliente es obligatorio.';
+  }
+  if (telefonoDigitos.length !== 11) {
+    return 'El teléfono ingresado no es válido (debe tener 11 dígitos, ej: 0412-345-6789).';
+  }
+
+  if (!c.vendedor.trim()) {
+    return 'El nombre del vendedor es obligatorio.';
+  }
+
+  return null;
+}
+
 /** Acción principal: envía el pedido activo a facturación (como factura
  *  temporal) en lugar de abrir WhatsApp. Queda pendiente de verificación
  *  en el módulo de facturación. */
@@ -751,12 +935,9 @@ async function pedEnviarAFacturacion() {
   _guardarEstadoFormulario(_pedidoActual);
   _recalcularTotales();
 
-  if (!_pedidoActual.productos.length) {
-    alert('Agrega al menos un producto antes de enviar el pedido.');
-    return;
-  }
-  if (!_pedidoActual.cliente.nombre) {
-    alert('Ingresa al menos el nombre del cliente antes de enviar el pedido.');
+  const errorValidacion = _validarCamposObligatorios(_pedidoActual);
+  if (errorValidacion) {
+    alert(errorValidacion);
     return;
   }
 
@@ -879,3 +1060,6 @@ window.pedReintentarPendientes     = pedReintentarPendientes;
 window.pedEnviarAFacturacion       = pedEnviarAFacturacion;
 window.pedConfirmarEnvioDesdeModal = pedConfirmarEnvioDesdeModal;
 window.cerrarModalErrorPedido      = cerrarModalErrorPedido;
+window.formatText                  = formatText;
+window.formatDoc                   = formatDoc;
+window.formatPhone                 = formatPhone;
