@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../css/main.css" />
+    <link rel="stylesheet" href="../css/subir-comprobante.css" />
+    <title>Subir comprobante de pago</title>
+  </head>
+
+  <body>
+    <main class="sc-main">
+      <div class="sc-card">
+
+        <header class="sc-header">
+          <i class="fas fa-receipt"></i>
+          <h1>Comprobante de pago</h1>
+          <p class="subtitle" id="scFacturaRef">Factura —</p>
+        </header>
+
+        <!-- Estado: parámetros inválidos (QR vencido o mal formado) -->
+        <div id="scEstadoInvalido" class="sc-estado hidden">
+          <i class="fas fa-triangle-exclamation"></i>
+          <p>Este enlace no es válido o el código QR ya expiró. Vuelve a la pantalla de verificación y genera uno nuevo.</p>
+        </div>
+
+        <!-- Estado: listo para tomar/elegir la foto -->
+        <div id="scEstadoInicial" class="sc-estado hidden">
+          <p class="sc-instrucciones">Toma una foto clara del comprobante o compróbalo desde tu galería.</p>
+
+          <input type="file" id="scInputFoto" accept="image/*" capture="environment" style="display:none;" />
+
+          <button type="button" class="btn-primary sc-btn-foto" id="scBtnTomarFoto">
+            <i class="fas fa-camera"></i> Tomar foto del comprobante
+          </button>
+
+          <div id="scPreviewBox" class="sc-preview-box hidden"></div>
+
+          <button type="button" class="btn-primary sc-btn-subir hidden" id="scBtnSubir">
+            <i class="fas fa-cloud-arrow-up"></i> Subir comprobante
+          </button>
+        </div>
+
+        <!-- Estado: subiendo -->
+        <div id="scEstadoSubiendo" class="sc-estado hidden">
+          <div class="spinner"></div>
+          <p>Subiendo comprobante…</p>
+        </div>
+
+        <!-- Estado: éxito -->
+        <div id="scEstadoExito" class="sc-estado hidden">
+          <div class="success-checkmark"><div class="check-icon"></div></div>
+          <h3>¡Comprobante recibido!</h3>
+          <p>Ya puedes volver a la pantalla de verificación en la computadora; el botón de aprobar se habilitará solo.</p>
+        </div>
+
+        <!-- Estado: error -->
+        <div id="scEstadoError" class="sc-estado hidden">
+          <i class="fas fa-circle-xmark"></i>
+          <p id="scErrorMensaje">Ocurrió un error al subir el comprobante.</p>
+          <button type="button" class="btn-secondary" id="scBtnReintentar">Intentar de nuevo</button>
+        </div>
+
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../js/supabase-config.js"></script>
+    <script src="../../js/subir-comprobante.js"></script>
+  </body>
+</html>
