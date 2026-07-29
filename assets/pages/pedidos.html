@@ -228,24 +228,9 @@
 
         <div class="modal-preview-footer">
           <!-- Input de teléfono -->
-          <div>
-            <label class="form-field" style="font-size:.78rem;color:var(--muted);margin-bottom:6px;">
-              <i class="fab fa-whatsapp" style="color:var(--wa-green);"></i>
-              Número de WhatsApp del cliente
-            </label>
-            <div class="wa-phone-input">
-              <span class="prefix"><i class="fas fa-flag"></i> +58</span>
-              <input type="tel" id="modalWaPhone" placeholder="4121234567"
-                     maxlength="10" oninput="this.value=this.value.replace(/\D/g,'')" />
-            </div>
-          </div>
-
           <div class="modal-preview-footer-actions">
             <button class="btn-copy-msg" id="btnCopyMsg" onclick="pedCopiarMensaje()">
               <i class="fas fa-copy"></i> Copiar
-            </button>
-            <button class="btn-enviar" onclick="pedConfirmarEnvioDesdeModal()">
-              <i class="fas fa-paper-plane"></i> Confirmar y Enviar
             </button>
           </div>
         </div>
