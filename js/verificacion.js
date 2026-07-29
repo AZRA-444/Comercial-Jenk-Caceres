@@ -546,7 +546,7 @@ async function _verComprobarSubidaQR() {
     const archivo = (data || []).find(f => f.name.startsWith(prefijoBusqueda));
     if (archivo) {
       _qrComprobantePath = `qr/${archivo.name}`;
-      _setEstadoQR('listo', 'Comprobante recibido desde el celular ✅');
+      _setEstadoQR('listo', 'Comprobante recibido desde el celular');
       _detenerPollingQR(true /* mantener el path detectado */);
       _actualizarEstadoBotonAprobar();
     }
