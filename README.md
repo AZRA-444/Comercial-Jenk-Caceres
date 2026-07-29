@@ -55,6 +55,7 @@ Supabase
 
 ```
 ├── index.html                 # Portada con accesos a cada módulo
+├── SECURITY.md                # Modelo de seguridad: login + RLS pendiente en Supabase
 ├── vercel.json                # Config de despliegue y rutas amigables
 ├── requirements.txt           # Dependencias Python del backend
 ├── api/                       # Funciones serverless (backend)
@@ -114,7 +115,14 @@ Requiere sesión (protegido por `auth-guard.js`). Muestra KPIs y gráficos (Char
 Cierre de caja, reporte de ventas por rango de fechas, reporte de comisiones y reimpresión de facturas, todo con una plantilla imprimible (ticket y hoja tamaño carta) vía un iframe oculto.
 
 ### 5.9 Login (`login.html`)
-Inicio de sesión contra Supabase Auth, requerido para entrar a las páginas de administración.
+Inicio de sesión contra Supabase Auth. `js/auth-guard.js` protege **todas**
+las páginas internas (portada, facturación, pedidos, verificación,
+historial, reportes y administrador): sin sesión válida, se redirige aquí
+automáticamente y, al iniciar sesión, se vuelve a la página que se quería
+ver. Quedan públicas a propósito solo `login.html` y
+`subir-comprobante.html` (la abre el cliente final desde un QR, sin
+cuenta). Ver `SECURITY.md` para la configuración pendiente en Supabase
+(Row Level Security) que complementa este login.
 
 ## 6. Backend (funciones serverless en `api/`)
 

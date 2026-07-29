@@ -96,8 +96,13 @@
   <script>
     const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Si auth-guard.js nos mandó para acá, recuerda a dónde volver.
+    // Por defecto, vuelve a la portada (no siempre al panel de administración).
+    const params = new URLSearchParams(window.location.search);
+    const rutaDestino = params.get("next") || "../../index.html";
+
     client.auth.getSession().then(({ data }) => {
-      if (data?.session) window.location.href = "administrador.html";
+      if (data?.session) window.location.href = rutaDestino;
     });
 
     document.getElementById("form-login").addEventListener("submit", async (e) => {
@@ -120,7 +125,7 @@
         return;
       }
 
-      window.location.href = "administrador.html";
+      window.location.href = rutaDestino;
     });
   </script>
 </body>
