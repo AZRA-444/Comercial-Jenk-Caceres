@@ -45,6 +45,10 @@ LONGITUDES_MAXIMAS = {
 
 ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
 
+# Ruta esperada para un comprobante subido directamente desde el celular vía
+# QR (ver subir-comprobante.js): siempre dentro de la carpeta "qr/" del bucket.
+COMPROBANTE_REMOTO_REGEX = re.compile(r"^qr/[A-Za-z0-9\-]{1,120}\.(jpg|jpeg|png|webp|heic)$")
+
 URL_SUPABASE = os.environ.get("SUPABASE_URL", "")
 KEY_SUPABASE = os.environ.get("SUPABASE_SECRET_KEY", "")
 
@@ -137,6 +141,42 @@ def _subir_comprobante(comprobante_base64, comprobante_tipo, id_factura):
 
     if res.status_code not in (200, 201):
         return None, f"No se pudo subir el comprobante: {res.text}"
+
+    return path, None
+
+
+def _verificar_comprobante_remoto(path, id_factura):
+    """Verifica que un comprobante subido DIRECTAMENTE desde el celular (vía QR,
+    ver subir-comprobante.js) realmente exista en el bucket antes de confiar en
+    su ruta. El celular sube el archivo con la anon key (sin pasar por este
+    backend), así que aquí solo se confirma su existencia y tamaño.
+    Devuelve (path, None) si es válido, o (None, mensaje_error) si no."""
+
+    path = str(path)
+    if not COMPROBANTE_REMOTO_REGEX.match(path):
+        return None, "Ruta de comprobante remoto inválida"
+
+    # La ruta debe corresponder a la factura que se está aprobando, para que
+    # un verificador no pueda "reutilizar" por error el comprobante de otra.
+    nombre_archivo = path.split("/", 1)[-1]
+    if not nombre_archivo.startswith(f"{id_factura}-"):
+        return None, "El comprobante subido no corresponde a esta factura"
+
+    url_publica = f"{URL_SUPABASE}/storage/v1/object/public/{BUCKET_COMPROBANTES}/{path}"
+    try:
+        res = session.head(url_publica, timeout=10)
+    except requests.exceptions.RequestException as e:
+        return None, f"No se pudo verificar el comprobante subido desde el celular: {e}"
+
+    if res.status_code != 200:
+        return None, "Aún no se encuentra el comprobante subido desde el celular. Intenta de nuevo en unos segundos."
+
+    content_length = res.headers.get("Content-Length")
+    try:
+        if content_length and int(content_length) > MAX_BYTES_COMPROBANTE:
+            return None, "El comprobante subido desde el celular supera el tamaño máximo permitido (5MB)"
+    except ValueError:
+        pass
 
     return path, None
 
@@ -273,14 +313,23 @@ class handler(BaseHTTPRequestHandler):
                     self._responder(400, {"status": "error", "message": "Los totales recalculados deben ser numéricos"})
                     return
 
-                # 5. Subir el comprobante de pago si el verificador adjuntó uno
+                # 5. Subir el comprobante de pago si el verificador adjuntó uno,
+                #    o verificar el que ya se subió directo desde el celular vía QR.
                 comprobante_path = None
                 comprobante_base64 = body_data.get("comprobante_base64")
                 comprobante_tipo = body_data.get("comprobante_tipo")
+                comprobante_path_remoto = body_data.get("comprobante_path_remoto")
 
                 if comprobante_base64 and comprobante_tipo:
                     comprobante_path, error_comprobante = _subir_comprobante(
                         comprobante_base64, comprobante_tipo, id_factura
+                    )
+                    if error_comprobante:
+                        self._responder(400, {"status": "error", "message": error_comprobante})
+                        return
+                elif comprobante_path_remoto:
+                    comprobante_path, error_comprobante = _verificar_comprobante_remoto(
+                        comprobante_path_remoto, id_factura
                     )
                     if error_comprobante:
                         self._responder(400, {"status": "error", "message": error_comprobante})
