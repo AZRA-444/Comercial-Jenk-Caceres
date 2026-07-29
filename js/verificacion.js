@@ -457,6 +457,8 @@ function verSelectMetodoPago(valor) {
           </div>
         </div>
       </div>`;
+    // Se genera después de insertar el HTML para que el contenedor #verQrContainer ya exista.
+    setTimeout(() => verGenerarQR(), 0);
   }
 
   _actualizarEstadoBotonAprobar();
