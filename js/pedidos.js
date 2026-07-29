@@ -1037,6 +1037,22 @@ async function pedCopiarMensaje() {
   }
 }
 
+function pedEnviarWhatsApp() {
+  if (!_pedidoActual) return;
+  _guardarEstadoFormulario(_pedidoActual);
+  _recalcularTotales();
+
+  const tel = _pedidoActual.cliente.telefono || '';
+  const numLimpio = tel.replace(/\D/g, '').replace(/^0/, '');
+
+  // Si tiene teléfono, abrir directamente; si no, abrir modal para pedirlo
+  if (numLimpio.length >= 10) {
+    _abrirWhatsApp(numLimpio);
+  } else {
+    pedAbrirVistaPrevia();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 10. Helpers
 // ---------------------------------------------------------------------------
