@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/pedidos.css" />
+    <link rel="icon" type="image/png" href="../img/favicon.ico">
+    <title>Pedidos — Comercial Jenk Cáceres</title>
+  </head>
+
+  <body>
+    <main>
+      <div class="main-card ped-layout">
+
+        <!-- HEADER -->
+        <header class="invoice-header">
+          <div>
+            <h1><i class="fab fa-whatsapp" style="color:var(--wa-green);margin-right:8px;"></i>Pedidos</h1>
+            <p class="subtitle">Registro de pedidos y envío a facturación</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-nueva-factura" id="btnNuevoPedido" title="Agregar nuevo pedido">
+              <i class="fas fa-plus"></i> Nuevo pedido
+            </button>
+            <a href="../../index.html" class="btn-secondary btn-back">
+              <i class="fas fa-arrow-left"></i> Volver
+            </a>
+          </div>
+        </header>
+
+        <!-- Banner de pedidos guardados localmente que aún no se han podido enviar -->
+        <div id="pedPendientesBanner" class="pendientes-banner hidden">
+          <span>
+            <i class="fas fa-triangle-exclamation"></i>
+            Tienes <strong id="pedPendientesCount">0</strong> pedido(s) guardados localmente que no se pudieron enviar a facturación.
+          </span>
+          <button type="button" class="btn-reintentar" id="btnReintentarPendientes" onclick="pedReintentarPendientes()">
+            <i class="fas fa-rotate"></i> Reintentar envío
+          </button>
+        </div>
+
+        <!-- COLUMNA IZQUIERDA: Lista de pedidos -->
+        <aside class="ped-sidebar">
+          <div class="sidebar-header">
+            <h2>Pedidos activos</h2>
+            <span class="badge-count" id="badgeCount">0</span>
+          </div>
+          <div id="listaPedidos" class="pedidos-list">
+            <div class="empty-state">
+              <i class="fas fa-cart-plus"></i>
+              <p>Aún no hay pedidos.<br>Crea uno con el botón de arriba.</p>
+            </div>
+          </div>
+        </aside>
+
+        <!-- COLUMNA DERECHA: Detalle del pedido seleccionado -->
+        <section class="ped-detail" id="seccionDetalle">
+
+          <!-- Estado vacío -->
+          <div class="detail-empty" id="detailEmpty">
+            <i class="fab fa-whatsapp" style="color:var(--wa-green);opacity:.4;"></i>
+            <p>Selecciona o crea un pedido<br>para comenzar a facturar</p>
+          </div>
+
+          <!-- Contenido del detalle -->
+          <div id="detailContent" class="detail-content hidden">
+
+            <!-- Tasa de cambio -->
+            <div class="ped-tasa-box">
+              <div class="form-field" style="flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap;">
+                <label for="pedTasaInput" style="font-size:.82rem;color:var(--muted);white-space:nowrap;margin:0;">
+                  <i class="fas fa-coins" style="color:var(--rose);margin-right:4px;"></i>
+                  Tasa del día (Bs/$)
+                </label>
+                <input type="number" id="pedTasaInput" placeholder="36.50" step="0.01"
+                       style="max-width:140px;" oninput="pedActualizarTasa(this.value)" />
+                <button type="button" class="btn-refresh-tasa" id="btnRefrescarTasa"
+                        title="Actualizar tasa desde el Banco Central" onclick="pedRefrescarTasa()">
+                  <i class="fas fa-rotate"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Datos del cliente -->
+            <div class="ped-cliente-section">
+              <h2 class="ped-section-title">
+                <i class="fas fa-user"></i> Datos del cliente
+              </h2>
+              <div class="ped-form-grid">
+                <label class="form-field">
+                  Nombre
+                  <input type="text" id="pedNombre" placeholder="María" oninput="pedSyncCliente()" />
+                </label>
+                <label class="form-field">
+                  Apellido
+                  <input type="text" id="pedApellido" placeholder="Pérez" oninput="pedSyncCliente()" />
+                </label>
+                <label class="form-field">
+                  Cédula
+                  <input type="text" id="pedCedula" placeholder="12.345.678" oninput="pedSyncCliente()" />
+                </label>
+                <label class="form-field">
+                  Teléfono (WhatsApp)
+                  <input type="text" id="pedTelefono" placeholder="0412-345-6789" oninput="pedSyncCliente()" />
+                </label>
+                <label class="form-field" style="grid-column:1/-1;">
+                  Vendedor
+                  <input type="text" id="pedVendedor" placeholder="Ingresa tu nombre" oninput="pedSyncCliente()" />
+                </label>
+              </div>
+            </div>
+
+            <!-- Agregar productos -->
+            <div class="ped-productos-section">
+              <h2 class="ped-section-title">
+                <i class="fas fa-boxes-stacked"></i> Productos
+              </h2>
+
+              <div class="ver-add-form form-billing-grid">
+                <label class="form-field">
+                  Cantidad
+                  <input type="number" id="pedCantProduct" placeholder="Ej: 2" min="1" />
+                </label>
+                <label class="form-field">
+                  Producto
+                  <input type="text" id="pedNombreProduct" placeholder="Nombre del producto" />
+                </label>
+                <label class="form-field">
+                  Precio UND ($)
+                  <input type="number" id="pedPrcUndProduct" placeholder="0.00" min="0" step="0.01" />
+                </label>
+                <label class="form-field">
+                  Precio Total ($)
+                  <input type="text" id="pedPrcTotalProduct" readonly placeholder="Calculado automáticamente" />
+                </label>
+                <div class="form-actions-row">
+                  <button class="btn-primary" onclick="pedAgregarProducto()">
+                    <i class="fas fa-plus"></i> Agregar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tabla de productos -->
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Cant.</th>
+                      <th>Producto</th>
+                      <th>UND $</th>
+                      <th>UND Bs</th>
+                      <th>Total $</th>
+                      <th>Total Bs</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tablaPedidoProductos">
+                    <tr>
+                      <td colspan="7" class="table-empty">Agrega productos para comenzar.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Totales -->
+              <div class="totales-box">
+                <div class="total-row">
+                  <span>Subtotal USD</span>
+                  <strong id="pedSubtotalUsd">$0.00</strong>
+                </div>
+                <div class="total-row">
+                  <span>Descuento</span>
+                  <strong id="pedDescuento" style="color:#22c55e;">-$0.00</strong>
+                </div>
+                <div class="total-row total-highlight">
+                  <span>Total USD</span>
+                  <strong id="pedTotalUsd">$0.00</strong>
+                </div>
+                <div class="total-row">
+                  <span>Total Bs</span>
+                  <strong id="pedTotalBs">Bs 0.00</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Acciones: Vista previa y WhatsApp -->
+            <div class="ped-actions">
+              <button class="btn-preview" onclick="pedAbrirVistaPrevia()">
+                <i class="fas fa-eye"></i> Vista previa
+              </button>
+              <button class="btn-enviar" id="btnEnviarPedido" onclick="pedEnviarAFacturacion()">
+                <i class="fas fa-paper-plane"></i> Enviar a Facturación
+              </button>
+            </div>
+
+          </div><!-- /detailContent -->
+        </section>
+
+      </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════
+         MODAL VISTA PREVIA
+    ════════════════════════════════════════════════ -->
+    <div id="modalPreview" class="modal-preview-backdrop hidden">
+      <div class="modal-preview-card">
+
+        <div class="modal-preview-header">
+          <h3><i class="fab fa-whatsapp"></i> Vista previa del mensaje</h3>
+          <button class="btn-close-modal" onclick="pedCerrarVistaPrevia()" title="Cerrar">
+            <i class="fas fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="modal-preview-body">
+          <div class="wa-bubble-wrap">
+            <div class="wa-bubble" id="waBubbleContent">
+              <!-- Mensaje generado dinámicamente -->
+            </div>
+            <div class="wa-bubble-time" id="waBubbleTime"></div>
+          </div>
+        </div>
+
+        <div class="modal-preview-footer">
+          <!-- Input de teléfono -->
+          <div>
+            <label class="form-field" style="font-size:.78rem;color:var(--muted);margin-bottom:6px;">
+              <i class="fab fa-whatsapp" style="color:var(--wa-green);"></i>
+              Número de WhatsApp del cliente
+            </label>
+            <div class="wa-phone-input">
+              <span class="prefix"><i class="fas fa-flag"></i> +58</span>
+              <input type="tel" id="modalWaPhone" placeholder="4121234567"
+                     maxlength="10" oninput="this.value=this.value.replace(/\D/g,'')" />
+            </div>
+          </div>
+
+          <div class="modal-preview-footer-actions">
+            <button class="btn-copy-msg" id="btnCopyMsg" onclick="pedCopiarMensaje()">
+              <i class="fas fa-copy"></i> Copiar
+            </button>
+            <button class="btn-enviar" onclick="pedConfirmarEnvioDesdeModal()">
+              <i class="fas fa-paper-plane"></i> Confirmar y Enviar
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Modal de estado (envío a facturación) ── -->
+    <div id="statusModal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div id="modalLoading" class="modal-status-section">
+          <div class="spinner"></div>
+          <p>Enviando pedido a facturación…</p>
+        </div>
+        <div id="modalSuccess" class="modal-status-section hidden">
+          <div class="success-checkmark"><div class="check-icon"></div></div>
+          <h3>¡Pedido enviado!</h3>
+          <p>Quedó guardado como factura temporal, lista para ser verificada.</p>
+        </div>
+        <div id="modalError" class="modal-status-section hidden">
+          <div class="error-icon">❌</div>
+          <h3>No se pudo enviar</h3>
+          <p id="modalErrorMessage">No se pudo procesar el pedido.</p>
+          <button type="button" onclick="cerrarModalErrorPedido()" class="btn-cerrar-modal">Entendido</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../js/utils.js"></script>
+    <script src="../../js/pedidos.js"></script>
+  </body>
+</html>
