@@ -4,6 +4,14 @@
 let _facturasPendientes = [];
 let _facturaActual      = null;
 
+// --- Estado de la subida de comprobante vía QR (celular) ---
+let _qrToken            = null;  // token único de la sesión de subida actual
+let _qrComprobantePath  = null;  // ruta dentro del bucket una vez detectado el archivo
+let _qrPollInterval     = null;  // referencia al setInterval de consulta en tiempo real
+let _qrPollIntentos     = 0;
+const QR_POLL_MS        = 3000;
+const QR_POLL_MAX_INTENTOS = 200; // ~10 minutos antes de detenerse solo
+
 // Estado editable de la factura seleccionada (se reconstruye al seleccionar)
 const verState = {
   productos:    [],   // copia editable de detalles_factura_temporal
@@ -110,6 +118,9 @@ function seleccionarFactura(index) {
   if (!factura) return;
   _facturaActual = factura;
 
+  // Cambiar de factura invalida cualquier sesión de QR de la factura anterior.
+  _detenerPollingQR();
+
   // Marcar tarjeta activa
   document.querySelectorAll('.factura-card').forEach(el =>
     el.classList.toggle('activa', parseInt(el.dataset.index) === index)
@@ -147,6 +158,7 @@ function seleccionarFactura(index) {
 
   // Renderizar tabla y totales
   verActualizarTabla();
+  _actualizarEstadoBotonAprobar();
 }
 
 // ---------------------------------------------------------------------------
@@ -304,6 +316,9 @@ function verSelectMetodoPago(valor) {
   const container = document.getElementById('verPaymentDetails');
   if (!container) return;
 
+  // Cambiar de método cancela cualquier sesión de subida por QR en curso.
+  _detenerPollingQR();
+
   container.innerHTML = '';
 
   const totalUSD = verState.totalUSD;
@@ -344,7 +359,22 @@ function verSelectMetodoPago(valor) {
           <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
         </button>
         <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
+      </div>
+
+      <!-- Subida del comprobante escaneando un QR con el celular -->
+      <div class="form-field qr-upload-container" style="grid-column: 1 / -1;">
+        <span class="capture-label">O escanea este código con tu celular para tomar la foto</span>
+        <div class="qr-upload-box">
+          <div id="verQrContainer" class="qr-code-container"></div>
+          <div class="qr-status" id="verQrStatus">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <span>Generando código QR…</span>
+          </div>
+        </div>
       </div>`;
+
+    // Se genera después de insertar el HTML para que el contenedor #verQrContainer ya exista.
+    setTimeout(() => verGenerarQR(), 0);
 
   } else if (valor === 'PVD' || valor === 'PVC') {
     container.innerHTML = montoHeader;
@@ -416,6 +446,8 @@ function verSelectMetodoPago(valor) {
         <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
       </div>`;
   }
+
+  _actualizarEstadoBotonAprobar();
 }
 
 /** Actualiza solo el monto mostrado dentro del bloque de pago ya renderizado */
@@ -439,6 +471,112 @@ function verPreviewReceipt(input) {
   } else {
     box.style.display = 'none';
     box.style.backgroundImage = 'none';
+  }
+  _actualizarEstadoBotonAprobar();
+}
+
+// ---------------------------------------------------------------------------
+// 6b. Subida del comprobante vía QR (el celular sube directo al bucket)
+// ---------------------------------------------------------------------------
+
+/** Cliente de Supabase (rol anon) reutilizado para leer el bucket de comprobantes. */
+let _supabaseClienteQR = null;
+function _getSupabaseClienteQR() {
+  if (_supabaseClienteQR) return _supabaseClienteQR;
+  if (!window.supabase?.createClient || typeof SUPABASE_URL === 'undefined') return null;
+  _supabaseClienteQR = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _supabaseClienteQR;
+}
+
+/** Genera un token de sesión, pinta el QR y arranca el sondeo en tiempo real. */
+function verGenerarQR() {
+  const qrBox = document.getElementById('verQrContainer');
+  if (!qrBox || !_facturaActual) return;
+
+  _detenerPollingQR();
+
+  _qrToken = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  _qrComprobantePath = null;
+
+  const idFactura = _facturaActual.id_factura;
+  const url = `${window.location.origin}/assets/pages/subir-comprobante.html?id=${encodeURIComponent(idFactura)}&token=${encodeURIComponent(_qrToken)}`;
+
+  qrBox.innerHTML = '';
+  if (window.QRCode) {
+    // eslint-disable-next-line no-new
+    new QRCode(qrBox, { text: url, width: 150, height: 150 });
+  } else {
+    qrBox.textContent = 'No se pudo cargar el generador de QR.';
+  }
+
+  _setEstadoQR('esperando', 'Esperando que se tome la foto desde el celular…');
+
+  _qrPollIntentos = 0;
+  _qrPollInterval = setInterval(_verComprobarSubidaQR, QR_POLL_MS);
+  // Primera consulta inmediata, sin esperar el primer intervalo.
+  _verComprobarSubidaQR();
+}
+
+/** Consulta el bucket buscando el archivo que suba el celular para esta sesión. */
+async function _verComprobarSubidaQR() {
+  if (!_qrToken || !_facturaActual) return;
+
+  const client = _getSupabaseClienteQR();
+  if (!client) {
+    _setEstadoQR('error', 'No se pudo conectar con el almacenamiento para verificar la subida.');
+    return;
+  }
+
+  _qrPollIntentos++;
+  if (_qrPollIntentos > QR_POLL_MAX_INTENTOS) {
+    _setEstadoQR('error', 'Se agotó el tiempo de espera. Genera un nuevo código QR.');
+    _detenerPollingQR();
+    return;
+  }
+
+  const idFactura = _facturaActual.id_factura;
+  const prefijoBusqueda = `${idFactura}-${_qrToken}`;
+
+  try {
+    const { data, error } = await client.storage.from('comprobantes').list('qr', { search: prefijoBusqueda });
+    if (error) {
+      console.warn('Error consultando el bucket de comprobantes:', error.message);
+      return; // se reintenta en el siguiente ciclo
+    }
+    const archivo = (data || []).find(f => f.name.startsWith(prefijoBusqueda));
+    if (archivo) {
+      _qrComprobantePath = `qr/${archivo.name}`;
+      _setEstadoQR('listo', 'Comprobante recibido desde el celular ✅');
+      _detenerPollingQR(true /* mantener el path detectado */);
+      _actualizarEstadoBotonAprobar();
+    }
+  } catch (err) {
+    console.warn('Error de red consultando el bucket de comprobantes:', err.message);
+  }
+}
+
+function _setEstadoQR(estado, mensaje) {
+  const el = document.getElementById('verQrStatus');
+  if (!el) return;
+  const iconos = {
+    esperando: '<i class="fas fa-circle-notch fa-spin"></i>',
+    listo:     '<i class="fas fa-circle-check" style="color: var(--success);"></i>',
+    error:     '<i class="fas fa-triangle-exclamation" style="color: var(--danger);"></i>',
+  };
+  el.className = `qr-status qr-status-${estado}`;
+  el.innerHTML = `${iconos[estado] || ''} <span>${escapeHtml(mensaje)}</span>`;
+}
+
+/** Detiene el sondeo periódico. Si conservarPath es false, también olvida el comprobante detectado. */
+function _detenerPollingQR(conservarPath = false) {
+  if (_qrPollInterval) {
+    clearInterval(_qrPollInterval);
+    _qrPollInterval = null;
+  }
+  _qrPollIntentos = 0;
+  if (!conservarPath) {
+    _qrToken = null;
+    _qrComprobantePath = null;
   }
 }
 
@@ -466,8 +604,8 @@ function _validarPago() {
       alert('Para Pago Móvil, ingresa el Número de Referencia (mínimo 4 dígitos).');
       return false;
     }
-    if (!comp?.files?.length) {
-      alert('Para Pago Móvil, adjunta el comprobante de pago.');
+    if (!comp?.files?.length && !_qrComprobantePath) {
+      alert('Para Pago Móvil, adjunta el comprobante de pago o espera a que se reciba desde el celular vía QR.');
       return false;
     }
   }
@@ -570,6 +708,7 @@ async function aprobarFacturaActual() {
   let comprobanteBase64 = null;
   let comprobanteNombre = null;
   let comprobanteTipo   = null;
+  let comprobantePathRemoto = null;
 
   const comprobanteInput = document.getElementById('verReceiptCapture');
   if (comprobanteInput?.files?.[0]) {
@@ -591,6 +730,10 @@ async function aprobarFacturaActual() {
       btn.disabled = false;
       return;
     }
+  } else if (_qrComprobantePath) {
+    // El comprobante ya fue subido directamente al bucket desde el celular
+    // (vía QR); no hace falta volver a subirlo, solo indicarle su ruta al backend.
+    comprobantePathRemoto = _qrComprobantePath;
   }
 
   const metodo = document.getElementById('verMetodoPago')?.value || 'OTROS';
@@ -611,6 +754,7 @@ async function aprobarFacturaActual() {
     comprobante_base64: comprobanteBase64,
     comprobante_nombre: comprobanteNombre,
     comprobante_tipo:   comprobanteTipo,
+    comprobante_path_remoto: comprobantePathRemoto,
 
     // Totales recalculados
     subtotal_usd:  verState.subtotalUSD,
@@ -637,6 +781,7 @@ async function aprobarFacturaActual() {
     if (!json) { btn.disabled = false; return; }
 
     if (json.status === 'success') {
+      _detenerPollingQR();
       mostrarModalExito('Factura aprobada correctamente. Si el papel se traba o se termina, usa los botones de abajo para reimprimir.');
 
       // Guardamos los datos para poder reimprimir en cualquier momento
@@ -930,9 +1075,31 @@ function filtrarFacturas() {
 // ---------------------------------------------------------------------------
 function limpiarDetalle() {
   _facturaActual = null;
+  _detenerPollingQR();
   document.getElementById('detailEmpty').classList.remove('hidden');
   document.getElementById('detailContent').classList.add('hidden');
   document.querySelectorAll('.factura-card').forEach(el => el.classList.remove('activa'));
+}
+
+/** Habilita/deshabilita el botón "Aprobar pago" según si falta el comprobante
+ *  para los métodos que lo requieren (PM y OTROS). Para el resto de métodos,
+ *  el botón queda habilitado y la validación completa ocurre al hacer clic. */
+function _actualizarEstadoBotonAprobar() {
+  const btn = document.getElementById('btnAprobar');
+  if (!btn) return;
+
+  const metodo = document.getElementById('verMetodoPago')?.value;
+  const requiereComprobante = metodo === 'PM' || metodo === 'OTROS';
+
+  if (!requiereComprobante) {
+    btn.disabled = false;
+    return;
+  }
+
+  const tieneArchivoLocal = !!document.getElementById('verReceiptCapture')?.files?.length;
+  const tieneComprobante  = tieneArchivoLocal || !!_qrComprobantePath;
+
+  btn.disabled = !tieneComprobante;
 }
 
 function _actualizarTotalesUI(subTotalUSD = 0, descuentoUSD = 0, totalUSD = 0, totalBS = 0) {
@@ -1052,6 +1219,7 @@ window.seleccionarFactura    = seleccionarFactura;
 window.verAgregarProducto    = verAgregarProducto;
 window.verSelectMetodoPago   = verSelectMetodoPago;
 window.verPreviewReceipt     = verPreviewReceipt;
+window.verGenerarQR          = verGenerarQR;
 window.aprobarFacturaActual  = aprobarFacturaActual;
 window.cerrarModalError      = cerrarModalError;
 window.imprimirNotaEntrega   = imprimirNotaEntrega;
