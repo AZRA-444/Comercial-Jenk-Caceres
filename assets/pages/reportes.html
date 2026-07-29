@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="../css/main.css"/>
+  <title>Reportes — Comercial Jenk Cáceres</title>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      Reportes
+      <small>Comercial Jenk Cáceres</small>
+    </div>
+    <div class="clock" id="clock"></div>
+    <button class="btn-cerrar-sesion" onclick="cerrarSesion()">
+      <i class="fas fa-right-from-bracket"></i> Salir
+    </button>
+  </div>
+
+  <div class="wrap fade-in-up">
+
+    <!-- Tabs -->
+    <div class="ledger-tabs">
+      <button class="active" data-panel="caja"><i class="fas fa-cash-register"></i> Cierre de caja</button>
+      <button data-panel="facturas"><i class="fas fa-receipt"></i> Facturas</button>
+      <button data-panel="ventas"><i class="fas fa-chart-line"></i> Ventas</button>
+      <button data-panel="comisiones"><i class="fas fa-hand-holding-dollar"></i> Comisiones</button>
+    </div>
+
+    <!-- ══════════════ PANEL: CIERRE DE CAJA ══════════════ -->
+    <div class="panel active" id="panel-caja">
+
+      <div class="filters">
+        <div class="field">
+          <label for="cc-fecha">Fecha</label>
+          <input type="date" id="cc-fecha"/>
+        </div>
+        <button class="btn btn-primary" id="btn-cc-generar">
+          <i class="fas fa-magnifying-glass"></i> Generar
+        </button>
+        <button class="btn ghost" id="btn-cc-imprimir">
+          <i class="fas fa-print"></i> Imprimir cierre de caja
+        </button>
+      </div>
+
+      <div class="status-msg" id="status-cc"></div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="label">Ventas totales USD</div>
+          <div class="value" id="cc-kpi-usd">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Ventas totales Bs</div>
+          <div class="value" id="cc-kpi-bs">0,00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Facturas emitidas</div>
+          <div class="value" id="cc-kpi-count">0</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Descuentos otorgados</div>
+          <div class="value" id="cc-kpi-desc">$0.00</div>
+        </div>
+      </div>
+
+      <h2 class="section-title">Desglose por método de pago</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Método</th>
+              <th class="num"># Facturas</th>
+              <th class="num">Total $</th>
+              <th class="num">Total Bs</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-cc-metodos"></tbody>
+        </table>
+        <div class="empty-state" id="empty-cc-metodos" style="display:none;">
+          <i class="fas fa-cash-register" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          No hay facturas registradas en la fecha seleccionada.
+        </div>
+      </div>
+
+      <h2 class="section-title">Desglose por vendedor</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Vendedor</th>
+              <th class="num"># Facturas</th>
+              <th class="num">Total $</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-cc-vendedores"></tbody>
+        </table>
+        <div class="empty-state" id="empty-cc-vendedores" style="display:none;">
+          <i class="fas fa-user" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          No hay facturas registradas en la fecha seleccionada.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════ PANEL: FACTURAS / REIMPRESIÓN ══════════════ -->
+    <div class="panel" id="panel-facturas">
+
+      <div class="filters">
+        <div class="field">
+          <label for="rf-mes">Mes</label>
+          <input type="month" id="rf-mes"/>
+        </div>
+        <div class="field">
+          <label for="rf-dia">Día específico</label>
+          <input type="date" id="rf-dia"/>
+        </div>
+        <div class="field">
+          <label for="rf-cedula">Cédula</label>
+          <input type="text" id="rf-cedula" placeholder="V-12345678"/>
+        </div>
+        <div class="field">
+          <label for="rf-vendedor">Vendedor</label>
+          <input type="text" id="rf-vendedor" placeholder="Nombre"/>
+        </div>
+        <div class="field">
+          <label for="rf-id">ID Factura</label>
+          <input type="text" id="rf-id" placeholder="FAC-…"/>
+        </div>
+        <div class="field">
+          <label for="rf-metodo">Método de pago</label>
+          <select id="rf-metodo">
+            <option value="">Todos</option>
+            <option value="PM">Pago Móvil</option>
+            <option value="PVD">Punto Débito</option>
+            <option value="PVC">Punto Crédito</option>
+            <option value="ED">Efectivo Divisa</option>
+            <option value="EBS">Efectivo Bolívares</option>
+            <option value="OTROS">Otros</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btn-rf-buscar">
+          <i class="fas fa-magnifying-glass"></i> Buscar
+        </button>
+        <button class="btn ghost" id="btn-rf-limpiar">
+          <i class="fas fa-xmark"></i> Limpiar
+        </button>
+      </div>
+
+      <div class="status-msg" id="status-rf"></div>
+
+      <h2 class="section-title">
+        Facturas encontradas <small id="rf-count-label"></small>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Cédula</th>
+              <th>Vendedor</th>
+              <th>Método</th>
+              <th class="num">Total $</th>
+              <th class="num">Total Bs</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-rf"></tbody>
+        </table>
+        <div class="empty-state" id="empty-rf" style="display:none;">
+          <i class="fas fa-receipt" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          Usa los filtros y presiona "Buscar" para ver facturas.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════ PANEL: REPORTE DE VENTAS ══════════════ -->
+    <div class="panel" id="panel-ventas">
+
+      <div class="filters">
+        <div class="field">
+          <label for="rv-desde">Desde</label>
+          <input type="date" id="rv-desde"/>
+        </div>
+        <div class="field">
+          <label for="rv-hasta">Hasta</label>
+          <input type="date" id="rv-hasta"/>
+        </div>
+        <div class="field">
+          <label for="rv-vendedor">Vendedor</label>
+          <input type="text" id="rv-vendedor" placeholder="Nombre"/>
+        </div>
+        <div class="field">
+          <label for="rv-metodo">Método de pago</label>
+          <select id="rv-metodo">
+            <option value="">Todos</option>
+            <option value="PM">Pago Móvil</option>
+            <option value="PVD">Punto Débito</option>
+            <option value="PVC">Punto Crédito</option>
+            <option value="ED">Efectivo Divisa</option>
+            <option value="EBS">Efectivo Bolívares</option>
+            <option value="OTROS">Otros</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btn-rv-generar">
+          <i class="fas fa-magnifying-glass"></i> Generar
+        </button>
+        <button class="btn ghost" id="btn-rv-imprimir">
+          <i class="fas fa-print"></i> Imprimir reporte
+        </button>
+        <button class="btn ghost" id="btn-rv-csv">
+          <i class="fas fa-file-csv"></i> Exportar CSV
+        </button>
+      </div>
+
+      <div class="status-msg" id="status-rv"></div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="label">Ventas totales USD</div>
+          <div class="value" id="rv-kpi-usd">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Ventas totales Bs</div>
+          <div class="value" id="rv-kpi-bs">0,00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Facturas emitidas</div>
+          <div class="value" id="rv-kpi-count">0</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Ticket promedio USD</div>
+          <div class="value" id="rv-kpi-avg">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Descuentos otorgados</div>
+          <div class="value" id="rv-kpi-desc">$0.00</div>
+        </div>
+      </div>
+
+      <h2 class="section-title">
+        Detalle de facturas <small id="rv-count-label"></small>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Vendedor</th>
+              <th>Método</th>
+              <th class="num">Subtotal $</th>
+              <th class="num">Desc. $</th>
+              <th class="num">Total $</th>
+              <th class="num">Total Bs</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-rv"></tbody>
+        </table>
+        <div class="empty-state" id="empty-rv" style="display:none;">
+          <i class="fas fa-chart-line" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          Selecciona un rango de fechas y presiona "Generar".
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════ PANEL: COMISIONES ══════════════ -->
+    <div class="panel" id="panel-comisiones">
+
+      <div class="filters">
+        <div class="field">
+          <label for="rc-mes">Mes a calcular</label>
+          <input type="month" id="rc-mes"/>
+        </div>
+        <button class="btn btn-primary" id="btn-rc-generar">
+          <i class="fas fa-calculator"></i> Generar
+        </button>
+        <button class="btn ghost" id="btn-rc-imprimir">
+          <i class="fas fa-print"></i> Imprimir reporte
+        </button>
+      </div>
+
+      <div class="status-msg" id="status-rc"></div>
+
+      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); max-width:640px;">
+        <div class="kpi">
+          <div class="label">Comisiones del mes</div>
+          <div class="value" id="rc-kpi-total">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Vendedores activos</div>
+          <div class="value" id="rc-kpi-vend">0</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Pendiente de pago</div>
+          <div class="value" id="rc-kpi-pend">$0.00</div>
+        </div>
+      </div>
+
+      <h2 class="section-title">
+        Comisiones por vendedor
+        <small id="rc-periodo-label"></small>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Vendedor</th>
+              <th class="num"># Ventas</th>
+              <th class="num">Total vendido $</th>
+              <th class="num">Comisión $</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-rc"></tbody>
+        </table>
+        <div class="empty-state" id="empty-rc" style="display:none;">
+          <i class="fas fa-users" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          No hay ventas registradas en ese mes.
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /wrap -->
+
+  <!-- Modal detalle factura -->
+  <div class="modal-overlay" id="modal-detalle">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modal-detalle-title">Factura</h3>
+        <button id="modal-detalle-close" aria-label="Cerrar" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--muted);">✕</button>
+      </div>
+      <div class="modal-body" id="modal-detalle-body"></div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="modal-detalle-cerrar">Cerrar</button>
+        <button class="btn btn-primary" id="modal-detalle-reimprimir">
+          <i class="fas fa-print"></i> Reimprimir
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../js/supabase-config.js"></script>
+  <script src="../../js/utils.js"></script>
+  <script src="../../js/auth-guard.js"></script>
+  <script src="../../js/reportes.js"></script>
+</body>
+</html>

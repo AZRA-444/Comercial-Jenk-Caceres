@@ -1,0 +1,33 @@
+/* ============================================================
+   REPORTES.CSS — Módulo de reportes.
+   La mayoría de la interfaz reutiliza las clases ya definidas en
+   global.css y admin-panel.css (topbar, wrap, ledger-tabs, filters,
+   kpis, table-wrap, modal, tag, btn…). Aquí solo van los ajustes
+   propios de esta pantalla.
+   ============================================================ */
+
+/* Iconos dentro de las pestañas */
+.ledger-tabs button i { margin-right: 6px; }
+
+/* Los filtros de esta pantalla incluyen botones sueltos (Generar,
+   Imprimir, Exportar) además de los campos; que se acomoden en la
+   misma fila sin estirarse como los inputs. */
+.filters .btn,
+.filters .btn-primary { align-self: end; white-space: nowrap; }
+
+@media (min-width: 768px) {
+  .filters { align-items: end; }
+}
+
+/* Botón "Reimprimir" dentro de la tabla de facturas: un poco más
+   compacto para convivir junto al botón "Ver". */
+td.text-center .btn.small { margin: 0 2px; }
+
+/* El botón de imprimir dentro del modal de detalle de factura usa el
+   mismo pie (modal-foot) que ya existe en admin-panel.css; solo se
+   asegura que ambos botones queden alineados a la derecha y del mismo
+   tamaño en pantallas angostas. */
+@media (max-width: 480px) {
+  .modal-foot { flex-wrap: wrap; }
+  .modal-foot .btn { flex: 1 1 auto; }
+}
