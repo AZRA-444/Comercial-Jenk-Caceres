@@ -97,6 +97,14 @@ async function _scManejarSeleccionArchivo(input) {
 async function _scSubirComprobante() {
   if (!_scArchivo || !_scIdFactura || !_scToken) return;
 
+  // Verificación preventiva de variables globales
+  if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') {
+    _scMostrarEstado('scEstadoError');
+    document.getElementById('scErrorMensaje').textContent =
+      'Error de configuración: No se encontraron las credenciales de Supabase.';
+    return;
+  }
+
   const client = _scGetClient();
   if (!client) {
     _scMostrarEstado('scEstadoError');
@@ -110,25 +118,30 @@ async function _scSubirComprobante() {
   const path = `qr/${_scIdFactura}-${_scToken}.jpg`;
 
   try {
-    const { error } = await client.storage
+    const { data, error } = await client.storage
       .from(BUCKET_COMPROBANTES)
-      .upload(path, _scArchivo, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, _scArchivo, { 
+        contentType: 'image/jpeg', 
+        upsert: true // Requiere políticas RLS de INSERT y UPDATE
+      });
 
     if (error) {
+      console.error('Error detallado de Supabase Storage:', error);
       _scMostrarEstado('scEstadoError');
       document.getElementById('scErrorMensaje').textContent =
-        'No se pudo subir el comprobante: ' + error.message;
+        'No se pudo subir el comprobante: ' + (error.message || 'Error de permisos en el Storage.');
       return;
     }
 
+    console.log('Comprobante subido con éxito:', data);
     _scMostrarEstado('scEstadoExito');
   } catch (err) {
+    console.error('Excepción al subir comprobante:', err);
     _scMostrarEstado('scEstadoError');
     document.getElementById('scErrorMensaje').textContent =
       'Error de conexión: ' + err.message;
   }
 }
-
 document.addEventListener('DOMContentLoaded', () => {
   const { id, token } = _scLeerParametros();
 
