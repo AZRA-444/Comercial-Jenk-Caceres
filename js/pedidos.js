@@ -503,7 +503,7 @@ function _generarMensajeWhatsApp(pedido) {
   // Líneas de productos
   const lineasProd = (pedido.productos || []).map(p => {
     const excl = p.excluidoDescuento ? ' _(sin desc.)_' : '';
-    return `  • ${p.cantidad}x ${escapeHtml(p.nombre)} — $${Number(p.precioTotal).toFixed(2)}${excl}`;
+    return `  • ${p.cantidad}x ${escapeHtml(p.nombre)} — $${Number(p.precioUnitario).toFixed(2)}${excl} — $${Number(p.precioTotal).toFixed(2)}${excl}`;
   }).join('\n');
 
   // Descuento: solo mostrar si hay
@@ -533,6 +533,11 @@ function _generarMensajeWhatsApp(pedido) {
     `✅ *TOTAL USD:* $${t.totalUSD.toFixed(2)}`,
     `🇻🇪 *TOTAL Bs:* Bs ${t.totalBS.toFixed(2)}`,
     `📈 *Tasa:* ${Number(tasa).toFixed(2)} Bs/$`,
+    ``,
+    `💵 *Datos del Pago Movil*`,
+    `*Telefono: 0414-146-5256*`,
+    `*Cedula: 13.468.427*`,
+    `*Bancos: Banesco (0134), Venezuela (0102), Banplus (0174), Provincial (0108)*`,
     ``,
     linVendedor.trim() || null,
     `_Gracias por su compra en Comercial Jenk Cáceres_ 🙏`,
