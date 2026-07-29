@@ -444,6 +444,18 @@ function verSelectMetodoPago(valor) {
           <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
         </button>
         <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
+      </div>
+      
+      <!-- Subida del comprobante escaneando un QR con el celular -->
+      <div class="form-field qr-upload-container" style="grid-column: 1 / -1;">
+        <span class="capture-label">O escanea este código con tu celular para tomar la foto</span>
+        <div class="qr-upload-box">
+          <div id="verQrContainer" class="qr-code-container"></div>
+          <div class="qr-status" id="verQrStatus">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <span>Generando código QR…</span>
+          </div>
+        </div>
       </div>`;
   }
 
