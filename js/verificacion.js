@@ -1,181 +1,358 @@
 // ---------------------------------------------------------------------------
+// Filtrado y formateo de datos en vivo (mientras el usuario escribe)
+// ---------------------------------------------------------------------------
+
+function formatText(input) {
+  let valor = input.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ ]/g, "");
+  input.value = valor
+    .split(" ")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatDoc(input) {
+  let valor = input.value.replace(/\D/g, "");
+  if (!valor) {
+    input.value = "";
+    return;
+  }
+  input.value = new Intl.NumberFormat("es-VE").format(parseInt(valor, 10));
+}
+
+function formatPhone(input) {
+  let telefono = input.value.replace(/\D/g, "");
+  if (telefono.length > 4 && telefono.length <= 7) {
+    telefono = telefono.slice(0, 4) + "-" + telefono.slice(4);
+  } else if (telefono.length > 7) {
+    telefono =
+      telefono.slice(0, 4) +
+      "-" +
+      telefono.slice(4, 7) +
+      "-" +
+      telefono.slice(7, 11);
+  }
+  input.value = telefono;
+}
+
+// ---------------------------------------------------------------------------
 // Estado del módulo
 // ---------------------------------------------------------------------------
-let _facturasPendientes = [];
-let _facturaActual      = null;
 
-// --- Estado de la subida de comprobante vía QR (celular) ---
-let _qrToken            = null;  // token único de la sesión de subida actual
-let _qrComprobantePath  = null;  // ruta dentro del bucket una vez detectado el archivo
-let _qrPollInterval     = null;  // referencia al setInterval de consulta en tiempo real
-let _qrPollIntentos     = 0;
-const QR_POLL_MS        = 3000;
-const QR_POLL_MAX_INTENTOS = 200; // ~10 minutos antes de detenerse solo
+let _pedidos       = [];
+let _pedidoActual  = null;  // referencia directa al objeto en _pedidos
+let _contadorPedidos = 0;
 
-// Estado editable de la factura seleccionada (se reconstruye al seleccionar)
-const verState = {
-  productos:    [],   // copia editable de detalles_factura_temporal
-  tasaCambio:   1,
-  subtotalUSD:  0,
-  descuentoUSD: 0,
-  totalUSD:     0,
-  totalBS:      0,
-};
+// ---------------------------------------------------------------------------
+// Configuración: backend de facturación y almacenamiento local
+// ---------------------------------------------------------------------------
+
+const BACKEND_API_URL = "/api/precargar-factura";
+
+const PEDIDOS_PENDIENTES_LS_KEY = "pedidosFacturasPendientes";
+
+const PEDIDOS_BORRADOR_LS_KEY = "pedidosBorradorActivos";
 
 // ---------------------------------------------------------------------------
 // Inicialización
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  cargarFacturasPendientes();
-
-  document.getElementById('inputBusqueda')
-    .addEventListener('input', filtrarFacturas);
-
-  document.getElementById('btnRefrescar')
-    .addEventListener('click', cargarFacturasPendientes);
-
-  // Calcular precio total automáticamente al tipear cantidad o precio
-  const cantInput = document.getElementById('verCantProduct');
-  const prcInput  = document.getElementById('verPrcUndProduct');
-  const totInput  = document.getElementById('verPrcTotalProduct');
+  // Calcular precio total automáticamente
+  const cantInput = document.getElementById('pedCantProduct');
+  const prcInput  = document.getElementById('pedPrcUndProduct');
+  const totInput  = document.getElementById('pedPrcTotalProduct');
 
   const calcTotal = () => {
     const cant = Number(cantInput.value) || 0;
     const prc  = Number(prcInput.value)  || 0;
-    totInput.value = (cant * prc).toFixed(2);
+    totInput.value = cant > 0 && prc > 0 ? (cant * prc).toFixed(2) : '';
   };
 
   cantInput.addEventListener('input', calcTotal);
-  prcInput.addEventListener('input',  calcTotal);
+  prcInput.addEventListener('input', calcTotal);
 
-  // Delegación de eventos para los botones de la tabla
-  document.getElementById('tablaVerificacionProductos')
+  // Delegación de eventos en tabla
+  document.getElementById('tablaPedidoProductos')
     .addEventListener('click', _manejarClickTabla);
+
+  // Botón nuevo pedido
+  document.getElementById('btnNuevoPedido')
+    .addEventListener('click', pedNuevoPedido);
+
+  // --- Formateo en vivo + sincronización + autoguardado de los campos del cliente ---
+  const inputNombre   = document.getElementById('pedNombre');
+  const inputApellido = document.getElementById('pedApellido');
+  const inputCedula   = document.getElementById('pedCedula');
+  const inputTelefono = document.getElementById('pedTelefono');
+  const inputVendedor = document.getElementById('pedVendedor');
+
+  const onCampoClienteInput = (formateador) => (e) => {
+    if (formateador) formateador(e.target);
+    pedSyncCliente();
+    _guardarBorradorLocalDebounced();
+  };
+
+  inputNombre?.addEventListener('input',   onCampoClienteInput(formatText));
+  inputApellido?.addEventListener('input', onCampoClienteInput(formatText));
+  inputVendedor?.addEventListener('input', onCampoClienteInput(formatText));
+  inputCedula?.addEventListener('input',   onCampoClienteInput(formatDoc));
+  inputTelefono?.addEventListener('input', onCampoClienteInput(formatPhone));
+
+  document.getElementById('pedTasaInput')
+    ?.addEventListener('input', () => _guardarBorradorLocalDebounced());
+
+  // --- Restaurar pedidos en curso guardados por autoguardado, si existen ---
+  const restaurado = _restaurarBorradorLocal();
+
+  if (!restaurado) {
+    // Restaurar vendedor guardado
+    const vendedorGuardado = localStorage.getItem('vendedorActual');
+    // Crear primer pedido automáticamente
+    _crearPedido(vendedorGuardado || '');
+  }
+
+  const tasaGuardada = localStorage.getItem('pedidosTasaCambio');
+  if (tasaGuardada && (!_pedidoActual?.tasaCambio || _pedidoActual.tasaCambio === 1)) {
+    document.getElementById('pedTasaInput').value = tasaGuardada;
+  }
+
+  // Consultar la tasa de cambio actual en la API (no bloquea la carga)
+  obtenerTasaDolarPedidos(document.getElementById('pedTasaInput'));
+
+  // Mostrar si hay pedidos guardados localmente y reintentar enviarlos
+  _actualizarBannerPendientes();
+  pedReintentarPendientes();
+  window.addEventListener('online', pedReintentarPendientes);
+
+  // --- Advertir antes de recargar/cerrar si hay datos sin enviar ---
+  window.addEventListener('beforeunload', (e) => {
+    // Aseguramos que quede guardado lo último escrito, aunque el debounce
+    // todavía no se haya disparado.
+    clearTimeout(_debounceGuardarBorrador);
+    _guardarBorradorLocal();
+
+    if (!_hayDatosSinEnviar()) return;
+    e.preventDefault();
+    e.returnValue = ''; // Requerido por Chrome/Firefox para mostrar el diálogo nativo
+    return '';
+  });
 });
 
 // ---------------------------------------------------------------------------
-// 1. Carga de facturas pendientes
+// 1. Gestión de pedidos
 // ---------------------------------------------------------------------------
-async function cargarFacturasPendientes() {
-  setListaEstado('loading');
 
-  try {
-    const res  = await fetch('/api/gestion-temporales', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const json = await _parseJSON(res);
-    if (!json) return;
-
-    if (json.status === 'success') {
-      _facturasPendientes = json.data || [];
-      renderizarLista(_facturasPendientes);
-      document.getElementById('badgeCount').textContent = _facturasPendientes.length;
-      if (_facturasPendientes.length > 0) seleccionarFactura(0);
-    } else {
-      setListaEstado('error', json.message);
-    }
-  } catch (err) {
-    setListaEstado('error', 'Error de conexión: ' + err.message);
-  }
+/** Crea un pedido nuevo y lo selecciona */
+function pedNuevoPedido() {
+  const vendedor = _pedidoActual?.cliente?.vendedor || localStorage.getItem('vendedorActual') || '';
+  const tasa     = Number(document.getElementById('pedTasaInput').value) || _pedidoActual?.tasaCambio || 1;
+  _crearPedido(vendedor, tasa);
 }
 
-// ---------------------------------------------------------------------------
-// 2. Renderizar lista de tarjetas
-// ---------------------------------------------------------------------------
-function renderizarLista(facturas) {
-  const lista = document.getElementById('listaPendientes');
+function _crearPedido(vendedorInicial = '', tasaInicial = 1) {
+  _contadorPedidos++;
+  const pedido = {
+    id:         `Pedido #${_contadorPedidos}`,
+    idFactura:  null, // se genera al enviar el pedido a facturación (se conserva entre reintentos)
+    cliente: {
+      nombre:   '',
+      apellido: '',
+      cedula:   '',
+      telefono: '',
+      vendedor: vendedorInicial,
+    },
+    productos:  [],
+    tasaCambio: tasaInicial,
+    totales: { subtotalUSD: 0, descuentoUSD: 0, totalUSD: 0, totalBS: 0 },
+  };
 
-  if (!facturas || facturas.length === 0) {
-    lista.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-circle-check"></i>
-        <p>Sin facturas pendientes.<br>¡Todo al día!</p>
-      </div>`;
-    limpiarDetalle();
+  _pedidos.push(pedido);
+  _renderizarListaSidebar();
+  _seleccionarPedido(pedido);
+  _guardarBorradorLocal();
+}
+
+/** Eliminar un pedido de la lista */
+function pedEliminarPedido(id, e) {
+  e.stopPropagation(); // evitar seleccionar al eliminar
+
+  if (_pedidos.length === 1) {
+    // Si es el único, vaciarlo en lugar de eliminarlo
+    _pedidoActual.productos  = [];
+    _pedidoActual.cliente    = { nombre:'', apellido:'', cedula:'', telefono:'', vendedor: _pedidoActual.cliente.vendedor };
+    _pedidoActual.totales    = { subtotalUSD:0, descuentoUSD:0, totalUSD:0, totalBS:0 };
+    _cargarPedidoEnFormulario(_pedidoActual);
+    _renderizarListaSidebar();
+    _guardarBorradorLocal();
     return;
   }
 
-  lista.innerHTML = facturas.map((f, i) => `
-    <div class="factura-card" data-index="${i}" onclick="seleccionarFactura(${i})">
-      <div class="factura-card-info">
-        <p class="factura-card-id">ID: ${escapeHtml(f.id_factura)}</p>
-        <p class="factura-card-meta">
-          ${escapeHtml(f.nombre || '')} ${escapeHtml(f.apellido || '')}
-          ${f.cedula ? '· ' + escapeHtml(f.cedula) : ''}
-        </p>
-      </div>
-      <span class="factura-card-total">$${Number(f.total_usd || 0).toFixed(2)}</span>
-    </div>
-  `).join('');
+  const idx = _pedidos.findIndex(p => p.id === id);
+  if (idx === -1) return;
+
+  _pedidos.splice(idx, 1);
+
+  // Si se eliminó el pedido actual, seleccionar el anterior o el primero
+  if (_pedidoActual?.id === id) {
+    const siguiente = _pedidos[Math.min(idx, _pedidos.length - 1)];
+    _renderizarListaSidebar();
+    _seleccionarPedido(siguiente);
+  } else {
+    _renderizarListaSidebar();
+  }
+  _guardarBorradorLocal();
 }
 
 // ---------------------------------------------------------------------------
-// 3. Seleccionar factura y construir estado editable
+// 2. Seleccionar y cargar pedido en el formulario
 // ---------------------------------------------------------------------------
-function seleccionarFactura(index) {
-  const factura = _facturasPendientes[index];
-  if (!factura) return;
-  _facturaActual = factura;
+function _seleccionarPedido(pedido) {
+  // Guardar estado actual antes de cambiar
+  if (_pedidoActual && _pedidoActual !== pedido) {
+    _guardarEstadoFormulario(_pedidoActual);
+  }
 
-  // Cambiar de factura invalida cualquier sesión de QR de la factura anterior.
-  _detenerPollingQR();
+  _pedidoActual = pedido;
 
   // Marcar tarjeta activa
-  document.querySelectorAll('.factura-card').forEach(el =>
-    el.classList.toggle('activa', parseInt(el.dataset.index) === index)
+  document.querySelectorAll('.pedido-card').forEach(el =>
+    el.classList.toggle('activa', el.dataset.id === pedido.id)
   );
-
-  // Encabezado
-  document.getElementById('detailId').textContent =
-    'ID: ' + factura.id_factura;
-  document.getElementById('detailCliente').textContent =
-    `${factura.nombre || ''} ${factura.apellido || ''}`.trim() || 'Cliente';
-
-  // Info cliente
-  document.getElementById('detailCedula').textContent    = factura.cedula    || 'N/A';
-  document.getElementById('detailTelefono').textContent  = factura.telefono  || 'N/A';
-  document.getElementById('detailVendedor').textContent  = factura.vendedor  || 'N/A';
-
-  // Construir estado editable de productos
-  const detalles   = factura.detalles_factura_temporal || [];
-  verState.tasaCambio = factura.tasa_cambio || 1;
-
-  verState.productos = detalles.map(p => ({
-    nombre:            p.nombre_producto,
-    cantidad:          Number(p.cantidad),
-    precioUnitario:    Number(p.precio_unitario),
-    precioTotal:       Number(p.precio_total),
-    excluidoDescuento: false,
-  }));
 
   // Mostrar panel
   document.getElementById('detailEmpty').classList.add('hidden');
   document.getElementById('detailContent').classList.remove('hidden');
 
+  // Cargar datos en formulario
+  _cargarPedidoEnFormulario(pedido);
+}
+
+function _cargarPedidoEnFormulario(pedido) {
+  // Tasa
+  const tasaInput = document.getElementById('pedTasaInput');
+  if (pedido.tasaCambio && pedido.tasaCambio > 0) {
+    tasaInput.value = pedido.tasaCambio;
+  }
+
+  // Cliente
+  document.getElementById('pedNombre').value    = pedido.cliente.nombre   || '';
+  document.getElementById('pedApellido').value  = pedido.cliente.apellido || '';
+  document.getElementById('pedCedula').value    = pedido.cliente.cedula   || '';
+  document.getElementById('pedTelefono').value  = pedido.cliente.telefono || '';
+  document.getElementById('pedVendedor').value  = pedido.cliente.vendedor || '';
+
   // Limpiar formulario de agregar producto
   _limpiarFormAgregar();
 
-  // Renderizar tabla y totales
-  verActualizarTabla();
-  _actualizarEstadoBotonAprobar();
+  // Renderizar tabla con los productos del pedido
+  _renderizarTabla();
+}
+
+/** Guarda los datos del formulario en el pedido actual */
+function _guardarEstadoFormulario(pedido) {
+  if (!pedido) return;
+  pedido.tasaCambio = Number(document.getElementById('pedTasaInput').value) || pedido.tasaCambio || 1;
+  pedido.cliente.nombre    = document.getElementById('pedNombre').value.trim();
+  pedido.cliente.apellido  = document.getElementById('pedApellido').value.trim();
+  pedido.cliente.cedula    = document.getElementById('pedCedula').value.trim();
+  pedido.cliente.telefono  = document.getElementById('pedTelefono').value.trim();
+  pedido.cliente.vendedor  = document.getElementById('pedVendedor').value.trim();
 }
 
 // ---------------------------------------------------------------------------
-// 4. CRUD — Agregar producto
+// 3. Renderizar sidebar
 // ---------------------------------------------------------------------------
-function verAgregarProducto() {
-  const cant = Number(document.getElementById('verCantProduct').value);
-  const name = document.getElementById('verNameProduct').value.trim();
-  const prc  = Number(document.getElementById('verPrcUndProduct').value);
-  const tot  = Number(document.getElementById('verPrcTotalProduct').value);
+function _renderizarListaSidebar() {
+  const lista = document.getElementById('listaPedidos');
+  document.getElementById('badgeCount').textContent = _pedidos.length;
 
-  if (!name || cant <= 0 || prc <= 0) {
-    alert('Por favor, llena correctamente los datos del producto (cantidad, nombre y precio).');
+  if (_pedidos.length === 0) {
+    lista.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-cart-plus"></i>
+        <p>Aún no hay pedidos.<br>Crea uno con el botón de arriba.</p>
+      </div>`;
     return;
   }
 
-  verState.productos.push({
+  lista.innerHTML = _pedidos.map(p => {
+    const nombreCliente = [p.cliente.nombre, p.cliente.apellido].filter(Boolean).join(' ') || 'Sin nombre';
+    const total = p.totales.totalUSD || 0;
+    return `
+      <div class="pedido-card" data-id="${escapeHtml(p.id)}"
+           onclick="pedSeleccionarPorId('${escapeHtml(p.id)}')">
+        <div class="pedido-card-left">
+          <span class="pedido-card-num">${escapeHtml(p.id)}</span>
+          <span class="pedido-card-nombre">${escapeHtml(nombreCliente)}</span>
+          <span class="pedido-card-meta">${p.productos.length} producto${p.productos.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="pedido-card-right">
+          <span class="pedido-card-total">$${total.toFixed(2)}</span>
+          <button class="btn-eliminar-pedido" title="Eliminar pedido"
+                  onclick="pedEliminarPedido('${escapeHtml(p.id)}', event)">
+            <i class="fas fa-xmark"></i>
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/** Seleccionar pedido desde el sidebar por ID */
+function pedSeleccionarPorId(id) {
+  const pedido = _pedidos.find(p => p.id === id);
+  if (pedido) _seleccionarPedido(pedido);
+}
+
+// ---------------------------------------------------------------------------
+// 4. Sync de campos del cliente al estado
+// ---------------------------------------------------------------------------
+function pedSyncCliente() {
+  if (!_pedidoActual) return;
+  _pedidoActual.cliente.nombre   = document.getElementById('pedNombre').value.trim();
+  _pedidoActual.cliente.apellido = document.getElementById('pedApellido').value.trim();
+  _pedidoActual.cliente.cedula   = document.getElementById('pedCedula').value.trim();
+  _pedidoActual.cliente.telefono = document.getElementById('pedTelefono').value.trim();
+  _pedidoActual.cliente.vendedor = document.getElementById('pedVendedor').value.trim();
+
+  // Guardar vendedor en localStorage para persistirlo entre módulos
+  if (_pedidoActual.cliente.vendedor) {
+    localStorage.setItem('vendedorActual', _pedidoActual.cliente.vendedor);
+  }
+
+  // Actualizar nombre en sidebar
+  _renderizarListaSidebar();
+  // Re-marcar activo
+  document.querySelectorAll('.pedido-card').forEach(el =>
+    el.classList.toggle('activa', el.dataset.id === _pedidoActual.id)
+  );
+}
+
+/** Sync de la tasa de cambio */
+function pedActualizarTasa(valor) {
+  if (!_pedidoActual) return;
+  const tasa = Number(valor) || 1;
+  _pedidoActual.tasaCambio = tasa;
+  localStorage.setItem('pedidosTasaCambio', tasa);
+  _renderizarTabla();
+  _guardarBorradorLocal();
+}
+
+// ---------------------------------------------------------------------------
+// 5. CRUD de productos
+// ---------------------------------------------------------------------------
+function pedAgregarProducto() {
+  if (!_pedidoActual) return;
+
+  const cant = Number(document.getElementById('pedCantProduct').value);
+  const name = document.getElementById('pedNombreProduct').value.trim();
+  const prc  = Number(document.getElementById('pedPrcUndProduct').value);
+  const tot  = Number(document.getElementById('pedPrcTotalProduct').value);
+
+  if (!name || cant <= 0 || prc <= 0) {
+    alert('Por favor, completa correctamente: cantidad, nombre y precio unitario.');
+    return;
+  }
+
+  _pedidoActual.productos.push({
     nombre:            name,
     cantidad:          cant,
     precioUnitario:    prc,
@@ -184,92 +361,87 @@ function verAgregarProducto() {
   });
 
   _limpiarFormAgregar();
-  verActualizarTabla();
+  _renderizarTabla();
+  _renderizarListaSidebar();
+  // Re-marcar activo
+  document.querySelectorAll('.pedido-card').forEach(el =>
+    el.classList.toggle('activa', el.dataset.id === _pedidoActual.id)
+  );
+  _guardarBorradorLocal();
 }
 
-// ---------------------------------------------------------------------------
-// 4b. CRUD — Delegación de eventos en la tabla
-// ---------------------------------------------------------------------------
 function _manejarClickTabla(e) {
   const btnEliminar = e.target.closest('.btn-eliminar');
   if (btnEliminar) {
     const idx = parseInt(btnEliminar.dataset.index, 10);
-    verState.productos.splice(idx, 1);
-    verActualizarTabla();
+    _pedidoActual.productos.splice(idx, 1);
+    _renderizarTabla();
+    _renderizarListaSidebar();
+    document.querySelectorAll('.pedido-card').forEach(el =>
+      el.classList.toggle('activa', el.dataset.id === _pedidoActual.id)
+    );
+    _guardarBorradorLocal();
     return;
   }
 
   const btnToggle = e.target.closest('.btn-toggle-desc');
   if (btnToggle) {
     const idx = parseInt(btnToggle.dataset.index, 10);
-    const p   = verState.productos[idx];
+    const p   = _pedidoActual.productos[idx];
     if (p) {
       p.excluidoDescuento = !p.excluidoDescuento;
-      verActualizarTabla();
+      _renderizarTabla();
+      _guardarBorradorLocal();
     }
   }
 }
 
-/**
- * Recalcula subtotales, descuentos y totales de la factura temporal activa
- * basándose en la lista de productos y la tasa de cambio actual.
- * 
- * @returns {Object} Objeto con todos los valores calculados
- */
-function recalcularTotales() {
-  const productos = verState.productos || [];
-  const tasa = Number(verState.tasaCambio) || 1;
+// ---------------------------------------------------------------------------
+// 6. Cálculo de totales
+// ---------------------------------------------------------------------------
+function _recalcularTotales() {
+  const productos = _pedidoActual?.productos || [];
+  const tasa = Number(_pedidoActual?.tasaCambio) || 1;
 
-  // 1. Separar productos descontables vs. excluidos
   const descontables = productos.filter(p => !p.excluidoDescuento);
-  const excluidos   = productos.filter(p => !!p.excluidoDescuento);
+  const excluidos    = productos.filter(p => !!p.excluidoDescuento);
 
-  // 2. Subtotales parciales
   const subDescUSD = descontables.reduce((acc, p) => acc + (Number(p.precioTotal) || 0), 0);
   const subExcUSD  = excluidos.reduce((acc, p) => acc + (Number(p.precioTotal) || 0), 0);
   const subTotalUSD = subDescUSD + subExcUSD;
 
-  // 3. Escala de descuento según monto aplicable (USD)
   let porcentaje = 0;
   if      (subDescUSD > 150) porcentaje = 20;
   else if (subDescUSD >  50) porcentaje = 15;
   else if (subDescUSD >  10) porcentaje = 10;
 
-  // 4. Cálculos finales
   const descuentoUSD = subDescUSD * (porcentaje / 100);
   const totalUSD     = subDescUSD - descuentoUSD + subExcUSD;
   const totalBS      = totalUSD * tasa;
 
-  // 5. Sincronizar el estado global del módulo
-  verState.subtotalUSD  = subTotalUSD;
-  verState.descuentoUSD = descuentoUSD;
-  verState.totalUSD     = totalUSD;
-  verState.totalBS      = totalBS;
+  // Guardar en el objeto del pedido
+  _pedidoActual.totales = { subtotalUSD: subTotalUSD, descuentoUSD, totalUSD, totalBS };
 
-  return {
-    subTotalUSD,
-    descuentoUSD,
-    totalUSD,
-    totalBS,
-    porcentaje
-  };
+  return { subTotalUSD, descuentoUSD, totalUSD, totalBS, porcentaje };
 }
 
 // ---------------------------------------------------------------------------
-// 5. Renderizar tabla editable y recalcular totales
+// 7. Renderizar tabla y actualizar UI
 // ---------------------------------------------------------------------------
-function verActualizarTabla() {
-  const tbody = document.getElementById('tablaVerificacionProductos');
-  const tasa  = verState.tasaCambio;
+function _renderizarTabla() {
+  if (!_pedidoActual) return;
 
-  if (!verState.productos || verState.productos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">Sin productos. Agrega uno arriba.</td></tr>`;
+  const tbody = document.getElementById('tablaPedidoProductos');
+  const tasa  = _pedidoActual.tasaCambio || 1;
+  const productos = _pedidoActual.productos;
+
+  if (!productos || productos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">Agrega productos para comenzar.</td></tr>`;
     _actualizarTotalesUI(0, 0, 0, 0);
     return;
   }
 
-  // 1. Renderizar filas de la tabla
-  tbody.innerHTML = verState.productos.map((p, i) => {
+  tbody.innerHTML = productos.map((p, i) => {
     const excluido      = !!p.excluidoDescuento;
     const precioUndBS   = (p.precioUnitario * tasa).toFixed(2);
     const precioTotalBS = (p.precioTotal    * tasa).toFixed(2);
@@ -285,7 +457,7 @@ function verActualizarTabla() {
           <button
             class="btn-toggle-desc${excluido ? ' active' : ''}"
             data-index="${i}"
-            title="${excluido ? 'Volver a incluir en el descuento' : 'Sacar del descuento (se suma completo al total)'}"
+            title="${excluido ? 'Volver a incluir en el descuento' : 'Excluir del descuento'}"
           >
             <i class="fa-solid ${excluido ? 'fa-rotate-left' : 'fa-tag'}"></i>
           </button>
@@ -296,946 +468,603 @@ function verActualizarTabla() {
       </tr>`;
   }).join('');
 
-  // 2. Ejecutar cálculo centralizado
-  const { subTotalUSD, descuentoUSD, totalUSD, totalBS } = recalcularTotales();
-
-  // 3. Reflejar montos en la interfaz
+  const { subTotalUSD, descuentoUSD, totalUSD, totalBS } = _recalcularTotales();
   _actualizarTotalesUI(subTotalUSD, descuentoUSD, totalUSD, totalBS);
+}
 
-  // 4. Actualizar el banner de la caja de pago si hay un método seleccionado
-  const metodo = document.getElementById('verMetodoPago')?.value;
-  if (metodo) {
-    _actualizarMontoPago(metodo, totalUSD, totalBS);
-  }
+function _actualizarTotalesUI(subTotalUSD, descuentoUSD, totalUSD, totalBS) {
+  const fmt = (n) => `$${Number(n || 0).toFixed(2)}`;
+  const fmtBs = (n) => `Bs ${Number(n || 0).toFixed(2)}`;
+
+  document.getElementById('pedSubtotalUsd').textContent = fmt(subTotalUSD);
+  document.getElementById('pedDescuento').textContent   = `-${fmt(descuentoUSD)}`;
+  document.getElementById('pedTotalUsd').textContent    = fmt(totalUSD);
+  document.getElementById('pedTotalBs').textContent     = fmtBs(totalBS);
 }
 
 // ---------------------------------------------------------------------------
-// 6. Módulo de pago — render dinámico según método
+// 8. Generación del mensaje de WhatsApp
 // ---------------------------------------------------------------------------
-function verSelectMetodoPago(valor) {
-  const container = document.getElementById('verPaymentDetails');
-  if (!container) return;
 
-  // Cambiar de método cancela cualquier sesión de subida por QR en curso.
-  _detenerPollingQR();
+/**
+ * Genera el texto del mensaje formateado para WhatsApp.
+ * Usa emojis y asteriscos para el formato en negrita de WhatsApp.
+ */
+function _generarMensajeWhatsApp(pedido) {
+  const c    = pedido.cliente;
+  const t    = pedido.totales;
+  const tasa = pedido.tasaCambio || 1;
+  const now  = new Date();
+  const fecha = now.toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const hora  = now.toLocaleTimeString('es-VE', { hour:'2-digit', minute:'2-digit' });
 
-  container.innerHTML = '';
+  const nombreCliente = [c.nombre, c.apellido].filter(Boolean).join(' ') || 'Cliente';
 
-  const totalUSD = verState.totalUSD;
-  const totalBS  = verState.totalBS;
+  // Líneas de productos
+  const lineasProd = (pedido.productos || []).map(p => {
+    const excl = p.excluidoDescuento ? ' _(sin desc.)_' : '';
+    return `  • ${p.cantidad}x ${escapeHtml(p.nombre)} — $${Number(p.precioUnitario).toFixed(2)}${excl} — $${Number(p.precioTotal).toFixed(2)}${excl}`;
+  }).join('\n');
 
-  const montoHeader = `
-    <div style="grid-column: 1 / -1; background: var(--accent-soft); border: 1px solid rgba(56,189,248,.25);
-                border-radius: 10px; padding: 14px 16px; margin-bottom: 4px;">
-      <p style="color: var(--text-secondary); font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;">
-        Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'PVC' ? 'transferir' : 'pagar'}:
-      </p>
-      <p class="ver-monto-display" style="color: var(--accent); font-size: 1.4rem; font-weight: 700; margin:0;">
-        $${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>
-      </p>
-    </div>`;
+  // Descuento: solo mostrar si hay
+  const linDescuento = t.descuentoUSD > 0
+    ? `🏷️ *Descuento:* -$${t.descuentoUSD.toFixed(2)}\n`
+    : '';
 
-  if (valor === 'PM') {
-    container.innerHTML = `
-      ${montoHeader}
-      <label class="form-field">Banco Destino
-        <select id="verBankSelect">
-          <option value="" disabled selected>Seleccione un banco</option>
-          <option value="Banesco">Banesco</option>
-          <option value="Venezuela">Banco de Venezuela</option>
-          <option value="Provincial">Provincial</option>
-          <option value="Banplus">Banplus</option>
-        </select>
-      </label>
-      <label class="form-field">Número de Referencia
-        <input type="number" id="verPmRef" placeholder="Últimos 4 dígitos" />
-      </label>
-      <div class="form-field capture-container" style="grid-column: 1 / -1;">
-        <span class="capture-label">Comprobante de Pago</span>
-        <input type="file" id="verReceiptCapture" accept="image/*" capture="environment"
-               style="display:none;" onchange="verPreviewReceipt(this)" />
-        <button type="button" class="btn-secondary btn-capture"
-                onclick="document.getElementById('verReceiptCapture').click()">
-          <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
-        </button>
-        <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
-      </div>
+  // Vendedor: solo mostrar si hay
+  const linVendedor = c.vendedor
+    ? `👤 *Atendido por:* ${escapeHtml(c.vendedor)}\n`
+    : '';
 
-      <!-- Subida del comprobante escaneando un QR con el celular -->
-      <div class="form-field qr-upload-container" style="grid-column: 1 / -1;">
-        <span class="capture-label">O escanea este código con tu celular para tomar la foto</span>
-        <div class="qr-upload-box">
-          <div id="verQrContainer" class="qr-code-container"></div>
-          <div class="qr-status" id="verQrStatus">
-            <i class="fas fa-circle-notch fa-spin"></i>
-            <span>Generando código QR…</span>
-          </div>
-        </div>
-      </div>`;
+  const msg = [
+    `🛒 *RESUMEN DE PEDIDO — Comercial Jenk Cáceres*`,
+    `📋 *${escapeHtml(pedido.id)}*`,
+    `📅 Fecha: ${fecha} a las ${hora}`,
+    ``,
+    `👤 *Cliente:* ${escapeHtml(nombreCliente)}`,
+    c.cedula   ? `🪪 *Cédula:* ${escapeHtml(c.cedula)}` : null,
+    c.telefono ? `📱 *Teléfono:* ${escapeHtml(c.telefono)}` : null,
+    ``,
+    `📦 *Productos:*`,
+    lineasProd || `  _(sin productos)_`,
+    ``,
+    `💵 *Subtotal:* $${t.subtotalUSD.toFixed(2)}`,
+    t.descuentoUSD > 0 ? `🏷️ *Descuento:* -$${t.descuentoUSD.toFixed(2)}` : null,
+    `✅ *TOTAL USD:* $${t.totalUSD.toFixed(2)}`,
+    `🇻🇪 *TOTAL Bs:* Bs ${t.totalBS.toFixed(2)}`,
+    `📈 *Tasa:* ${Number(tasa).toFixed(2)} Bs/$`,
+    ``,
+    `💵 *Datos del Pago Movil*`,
+    `*Telefono: 0414-146-5256*`,
+    `*Cedula: 13.468.427*`,
+    `*Bancos: Banesco (0134), Venezuela (0102), Banplus (0174), Provincial (0108)*`,
+    ``,
+    linVendedor.trim() || null,
+    `_Gracias por su compra en Comercial Jenk Cáceres_ 🙏`,
+  ].filter(l => l !== null).join('\n');
 
-    // Se genera después de insertar el HTML para que el contenedor #verQrContainer ya exista.
-    setTimeout(() => verGenerarQR(), 0);
-
-  } else if (valor === 'PVD' || valor === 'PVC') {
-    container.innerHTML = montoHeader;
-
-  } else if (valor === 'ED') {
-    container.innerHTML = `
-      ${montoHeader}
-      <label class="form-field">Monto Recibido ($)
-        <input type="number" id="verEDMontoRecibido" placeholder="ej: 20" step="0.01" />
-      </label>
-      <label class="form-field">Vuelto a Entregar ($)
-        <input type="text" id="verEDVuelto" readonly placeholder="0.00" />
-      </label>
-      <label class="form-field" style="grid-column: 1 / -1;">Observaciones
-        <textarea id="verObsED" rows="3" placeholder="Detalla alguna novedad..."></textarea>
-      </label>`;
-
-    // Listener de vuelto
-    setTimeout(() => {
-      const recInput = document.getElementById('verEDMontoRecibido');
-      const vueltoIn = document.getElementById('verEDVuelto');
-      if (recInput && vueltoIn) {
-        recInput.addEventListener('input', () => {
-          const rec = Number(recInput.value) || 0;
-          vueltoIn.value = rec < verState.totalUSD
-            ? '0.00'
-            : `$${(rec - verState.totalUSD).toFixed(2)}`;
-        });
-      }
-    }, 0);
-
-  } else if (valor === 'EBS') {
-    container.innerHTML = `
-      ${montoHeader}
-      <label class="form-field">Monto Recibido (Bs)
-        <input type="number" id="verEBSMontoRecibido" placeholder="ej: 2500" step="0.01" />
-      </label>
-      <label class="form-field">Vuelto a Entregar (Bs)
-        <input type="text" id="verEBSVuelto" readonly placeholder="0.00" />
-      </label>`;
-
-    setTimeout(() => {
-      const recInput = document.getElementById('verEBSMontoRecibido');
-      const vueltoIn = document.getElementById('verEBSVuelto');
-      if (recInput && vueltoIn) {
-        recInput.addEventListener('input', () => {
-          const rec = Number(recInput.value) || 0;
-          vueltoIn.value = rec < verState.totalBS
-            ? '0.00'
-            : `${(rec - verState.totalBS).toFixed(2)}Bs`;
-        });
-      }
-    }, 0);
-
-  } else if (valor === 'OTROS') {
-    container.innerHTML = `
-      ${montoHeader}
-      <label class="form-field" style="grid-column: 1 / -1;">Observaciones
-        <textarea id="verObsOTROS" rows="3" placeholder="Detalla alguna novedad..."></textarea>
-      </label>
-      <div class="form-field capture-container" style="grid-column: 1 / -1;">
-        <span class="capture-label">Comprobante de Pago</span>
-        <input type="file" id="verReceiptCapture" accept="image/*" capture="environment"
-               style="display:none;" onchange="verPreviewReceipt(this)" />
-        <button type="button" class="btn-secondary btn-capture"
-                onclick="document.getElementById('verReceiptCapture').click()">
-          <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
-        </button>
-        <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
-      </div>
-      
-      <!-- Subida del comprobante escaneando un QR con el celular -->
-      <div class="form-field qr-upload-container" style="grid-column: 1 / -1;">
-        <span class="capture-label">O escanea este código con tu celular para tomar la foto</span>
-        <div class="qr-upload-box">
-          <div id="verQrContainer" class="qr-code-container"></div>
-          <div class="qr-status" id="verQrStatus">
-            <i class="fas fa-circle-notch fa-spin"></i>
-            <span>Generando código QR…</span>
-          </div>
-        </div>
-      </div>`;
-    // Se genera después de insertar el HTML para que el contenedor #verQrContainer ya exista.
-    setTimeout(() => verGenerarQR(), 0);
-  }
-
-  _actualizarEstadoBotonAprobar();
-}
-
-/** Actualiza solo el monto mostrado dentro del bloque de pago ya renderizado */
-function _actualizarMontoPago(metodo, totalUSD, totalBS) {
-  const el = document.querySelector('.ver-monto-display');
-  if (!el) return;
-  el.innerHTML = `$${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>`;
-}
-
-/** Preview del comprobante seleccionado */
-function verPreviewReceipt(input) {
-  const box = document.getElementById('verReceiptPreview');
-  if (!box) return;
-  if (input.files?.[0]) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      box.style.display = 'block';
-      box.style.backgroundImage = `url('${e.target.result}')`;
-    };
-    reader.readAsDataURL(input.files[0]);
-  } else {
-    box.style.display = 'none';
-    box.style.backgroundImage = 'none';
-  }
-  _actualizarEstadoBotonAprobar();
+  return msg;
 }
 
 // ---------------------------------------------------------------------------
-// 6b. Subida del comprobante vía QR (el celular sube directo al bucket)
+// 8b. Tasa de cambio vía API
 // ---------------------------------------------------------------------------
 
-/** Cliente de Supabase (rol anon) reutilizado para leer el bucket de comprobantes. */
-let _supabaseClienteQR = null;
-function _getSupabaseClienteQR() {
-  if (_supabaseClienteQR) return _supabaseClienteQR;
-  if (!window.supabase?.createClient || typeof SUPABASE_URL === 'undefined') return null;
-  _supabaseClienteQR = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return _supabaseClienteQR;
-}
-
-/** Genera un token de sesión, pinta el QR y arranca el sondeo en tiempo real. */
-function verGenerarQR() {
-  const qrBox = document.getElementById('verQrContainer');
-  if (!qrBox || !_facturaActual) return;
-
-  _detenerPollingQR();
-
-  _qrToken = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  _qrComprobantePath = null;
-
-  const idFactura = _facturaActual.id_factura;
-  const url = `${window.location.origin}/assets/pages/subir-comprobante.html?id=${encodeURIComponent(idFactura)}&token=${encodeURIComponent(_qrToken)}`;
-
-  qrBox.innerHTML = '';
-  if (window.QRCode) {
-    // eslint-disable-next-line no-new
-    new QRCode(qrBox, { text: url, width: 150, height: 150 });
-  } else {
-    qrBox.textContent = 'No se pudo cargar el generador de QR.';
-  }
-
-  _setEstadoQR('esperando', 'Esperando que se tome la foto desde el celular…');
-
-  _qrPollIntentos = 0;
-  _qrPollInterval = setInterval(_verComprobarSubidaQR, QR_POLL_MS);
-  // Primera consulta inmediata, sin esperar el primer intervalo.
-  _verComprobarSubidaQR();
-}
-
-/** Consulta el bucket buscando el archivo que suba el celular para esta sesión. */
-async function _verComprobarSubidaQR() {
-  if (!_qrToken || !_facturaActual) return;
-
-  const client = _getSupabaseClienteQR();
-  if (!client) {
-    _setEstadoQR('error', 'No se pudo conectar con el almacenamiento para verificar la subida.');
-    return;
-  }
-
-  _qrPollIntentos++;
-  if (_qrPollIntentos > QR_POLL_MAX_INTENTOS) {
-    _setEstadoQR('error', 'Se agotó el tiempo de espera. Genera un nuevo código QR.');
-    _detenerPollingQR();
-    return;
-  }
-
-  const idFactura = _facturaActual.id_factura;
-  const prefijoBusqueda = `${idFactura}-${_qrToken}`;
-
+/** Consulta la tasa USD→VES actual y la aplica al input y al pedido activo
+ *  (si este todavía no tiene una tasa manual distinta a la de por defecto). */
+async function obtenerTasaDolarPedidos(inputTasa) {
+  if (!inputTasa) return;
   try {
-    const { data, error } = await client.storage.from('comprobantes').list('qr', { search: prefijoBusqueda });
-    if (error) {
-      console.warn('Error consultando el bucket de comprobantes:', error.message);
-      return; // se reintenta en el siguiente ciclo
+    const response = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await response.json();
+
+    if (data?.rates?.VES) {
+      const tasa = data.rates.VES;
+      localStorage.setItem('pedidosTasaCambio', tasa);
+
+      // No pisar lo que el usuario esté escribiendo en este momento
+      if (document.activeElement !== inputTasa) {
+        inputTasa.value = tasa.toFixed(2);
+      }
+
+      if (_pedidoActual && (!_pedidoActual.tasaCambio || _pedidoActual.tasaCambio === 1)) {
+        _pedidoActual.tasaCambio = tasa;
+        _renderizarTabla();
+      }
     }
-    const archivo = (data || []).find(f => f.name.startsWith(prefijoBusqueda));
-    if (archivo) {
-      _qrComprobantePath = `qr/${archivo.name}`;
-      _setEstadoQR('listo', 'Comprobante recibido desde el celular');
-      _detenerPollingQR(true /* mantener el path detectado */);
-      _actualizarEstadoBotonAprobar();
-    }
+  } catch (error) {
+    console.warn('No se pudo actualizar la tasa desde la API. Se mantiene el valor manual o en caché.', error);
+  }
+}
+
+/** Botón de refresco manual junto al input de tasa. */
+function pedRefrescarTasa() {
+  const inputTasa = document.getElementById('pedTasaInput');
+  const btn = document.getElementById('btnRefrescarTasa');
+  if (btn) btn.classList.add('girando');
+
+  obtenerTasaDolarPedidos(inputTasa).finally(() => {
+    if (btn) btn.classList.remove('girando');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 8b-bis. Autoguardado de borrador (evitar perder pedidos en curso)
+// ---------------------------------------------------------------------------
+// A diferencia de la cola de "pendientes" (8c), que solo guarda facturas que
+// YA se intentaron enviar y fallaron, esto guarda TODO lo que el usuario va
+// escribiendo en pantalla —incluso pedidos que ni siquiera se han intentado
+// enviar— para poder recuperarlos si la página se recarga o se cierra sin
+// querer, se corta la luz/conexión, etc.
+
+/** Serializa y guarda en localStorage el estado completo de los pedidos
+ *  activos en sesión (todos los de la sidebar), incluyendo el que se está
+ *  editando ahora mismo en el formulario. */
+function _guardarBorradorLocal() {
+  try {
+    if (_pedidoActual) _guardarEstadoFormulario(_pedidoActual);
+
+    const estado = {
+      pedidos: _pedidos,
+      contadorPedidos: _contadorPedidos,
+      pedidoActualId: _pedidoActual?.id || null,
+    };
+    localStorage.setItem(PEDIDOS_BORRADOR_LS_KEY, JSON.stringify(estado));
   } catch (err) {
-    console.warn('Error de red consultando el bucket de comprobantes:', err.message);
+    console.warn('No se pudo guardar el borrador de pedidos en localStorage:', err);
   }
 }
 
-function _setEstadoQR(estado, mensaje) {
-  const el = document.getElementById('verQrStatus');
-  if (!el) return;
-  const iconos = {
-    esperando: '<i class="fas fa-circle-notch fa-spin"></i>',
-    listo:     '<i class="fas fa-circle-check" style="color: var(--success);"></i>',
-    error:     '<i class="fas fa-triangle-exclamation" style="color: var(--danger);"></i>',
-  };
-  el.className = `qr-status qr-status-${estado}`;
-  el.innerHTML = `${iconos[estado] || ''} <span>${escapeHtml(mensaje)}</span>`;
+/** Elimina el borrador guardado (se llama una vez que ya no hace falta,
+ *  por ejemplo si el usuario limpia todo manualmente). */
+function _borrarBorradorLocal() {
+  localStorage.removeItem(PEDIDOS_BORRADOR_LS_KEY);
 }
 
-/** Detiene el sondeo periódico. Si conservarPath es false, también olvida el comprobante detectado. */
-function _detenerPollingQR(conservarPath = false) {
-  if (_qrPollInterval) {
-    clearInterval(_qrPollInterval);
-    _qrPollInterval = null;
-  }
-  _qrPollIntentos = 0;
-  if (!conservarPath) {
-    _qrToken = null;
-    _qrComprobantePath = null;
-  }
+/** Versión con debounce de _guardarBorradorLocal, pensada para usarse en
+ *  eventos que disparan muy seguido (como "input" al escribir), para no
+ *  golpear localStorage en cada tecla. */
+let _debounceGuardarBorrador = null;
+function _guardarBorradorLocalDebounced(delayMs = 400) {
+  clearTimeout(_debounceGuardarBorrador);
+  _debounceGuardarBorrador = setTimeout(_guardarBorradorLocal, delayMs);
 }
 
-// ---------------------------------------------------------------------------
-// 7. Validar formulario de pago antes de aprobar
-// ---------------------------------------------------------------------------
-function _validarPago() {
-  const metodo = document.getElementById('verMetodoPago')?.value;
+/** Restaura los pedidos guardados por el autoguardado, si hay alguno con
+ *  datos reales (para no "revivir" pedidos vacíos sin sentido).
+ *  Devuelve true si restauró algo, false si no había nada que restaurar. */
+function _restaurarBorradorLocal() {
+  let estado;
+  try {
+    estado = JSON.parse(localStorage.getItem(PEDIDOS_BORRADOR_LS_KEY));
+  } catch {
+    estado = null;
+  }
 
-  if (!metodo) {
-    alert('Por favor selecciona un método de pago antes de aprobar.');
+  if (!estado || !Array.isArray(estado.pedidos) || estado.pedidos.length === 0) {
     return false;
   }
 
-  if (metodo === 'PM') {
-    const banco = document.getElementById('verBankSelect')?.value;
-    const ref   = document.getElementById('verPmRef')?.value.trim();
-    const comp  = document.getElementById('verReceiptCapture');
+  const tieneDatos = estado.pedidos.some(p =>
+    (p.productos && p.productos.length > 0) ||
+    Object.values(p.cliente || {}).some(v => (v || '').trim() !== '')
+  );
+  if (!tieneDatos) return false;
 
-    if (!banco) {
-      alert('Para Pago Móvil, selecciona un Banco Destino.');
-      return false;
-    }
-    if (!ref || ref.length < 4) {
-      alert('Para Pago Móvil, ingresa el Número de Referencia (mínimo 4 dígitos).');
-      return false;
-    }
-    if (!comp?.files?.length && !_qrComprobantePath) {
-      alert('Para Pago Móvil, adjunta el comprobante de pago o espera a que se reciba desde el celular vía QR.');
-      return false;
-    }
-  }
+  _pedidos = estado.pedidos;
+  _contadorPedidos = estado.contadorPedidos || _pedidos.length;
 
-  if (metodo === 'ED') {
-    const monto = Number(document.getElementById('verEDMontoRecibido')?.value);
-    if (!monto || monto < verState.totalUSD) {
-      alert(`El monto recibido en $ es menor al total ($${verState.totalUSD.toFixed(2)}).`);
-      return false;
-    }
-  }
+  _renderizarListaSidebar();
 
-  if (metodo === 'EBS') {
-    const monto = Number(document.getElementById('verEBSMontoRecibido')?.value);
-    if (!monto || monto < verState.totalBS) {
-      alert(`El monto recibido en Bs es menor al total (${verState.totalBS.toFixed(2)} Bs).`);
-      return false;
-    }
-  }
-
-  if (metodo === 'OTROS') {
-    const obs  = document.getElementById('verObsOTROS')?.value.trim();
-    const comp = document.getElementById('verReceiptCapture');
-    if (!obs) {
-      alert('Para el método OTROS, detalla las observaciones.');
-      return false;
-    }
-    if (!comp?.files?.length) {
-      alert('Para el método OTROS, adjunta el comprobante de pago.');
-      return false;
-    }
-  }
+  const pedidoARestaurar =
+    _pedidos.find(p => p.id === estado.pedidoActualId) || _pedidos[0];
+  _seleccionarPedido(pedidoARestaurar);
 
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// 8. Comprimir imagen comprobante
-// ---------------------------------------------------------------------------
-function _comprimirImagen(file, maxAncho = 1600, calidad = 0.75) {
-  return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('El archivo no es una imagen'));
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      if (width > maxAncho) {
-        height = Math.round((height * maxAncho) / width);
-        width  = maxAncho;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('No se pudo preparar el canvas')); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(blob => {
-        if (!blob) { reject(new Error('No se pudo comprimir la imagen')); return; }
-        resolve(new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }));
-      }, 'image/jpeg', calidad);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
-    img.src = url;
-  });
-}
-
-function _fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+/** Indica si hay algo que se perdería al cerrar/recargar la página ahora
+ *  mismo: pedidos en curso con datos, o facturas que fallaron al enviarse
+ *  y siguen en cola. Se usa para el aviso de "beforeunload". */
+function _hayDatosSinEnviar() {
+  const hayPedidosConDatos = _pedidos.some(p =>
+    (p.productos && p.productos.length > 0) ||
+    Object.values(p.cliente || {}).some(v => (v || '').trim() !== '')
+  );
+  const hayPendientes = _obtenerPendientesLocal().length > 0;
+  return hayPedidosConDatos || hayPendientes;
 }
 
 // ---------------------------------------------------------------------------
-// 9. Aprobar factura — con datos de pago editados
+// 8c. Cola de facturas pendientes en localStorage
 // ---------------------------------------------------------------------------
-async function aprobarFacturaActual() {
-  if (!_facturaActual) return;
 
-  // Validar que haya al menos un producto
-  if (!verState.productos || verState.productos.length === 0) {
-    alert('La factura no puede aprobarse sin productos.');
+function _obtenerPendientesLocal() {
+  try {
+    return JSON.parse(localStorage.getItem(PEDIDOS_PENDIENTES_LS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function _guardarPendientesLocal(lista) {
+  localStorage.setItem(PEDIDOS_PENDIENTES_LS_KEY, JSON.stringify(lista));
+}
+
+function _agregarOActualizarPendienteLocal(payload) {
+  const lista = _obtenerPendientesLocal();
+  const idx = lista.findIndex(f => f.id_factura === payload.id_factura);
+  if (idx >= 0) lista[idx] = payload;
+  else lista.push(payload);
+  _guardarPendientesLocal(lista);
+  _actualizarBannerPendientes();
+}
+
+function _quitarPendienteLocal(idFactura) {
+  const lista = _obtenerPendientesLocal().filter(f => f.id_factura !== idFactura);
+  _guardarPendientesLocal(lista);
+  _actualizarBannerPendientes();
+}
+
+function _actualizarBannerPendientes() {
+  const banner = document.getElementById('pedPendientesBanner');
+  if (!banner) return;
+  const lista = _obtenerPendientesLocal();
+
+  if (lista.length === 0) {
+    banner.classList.add('hidden');
     return;
   }
+  banner.classList.remove('hidden');
+  const contador = document.getElementById('pedPendientesCount');
+  if (contador) contador.textContent = lista.length;
+}
 
-  // Validar formulario de pago
-  if (!_validarPago()) return;
+/** Intenta reenviar todas las facturas guardadas localmente por fallas
+ *  previas de red o del servidor. Se llama al cargar la página y al
+ *  recuperar la conexión. Los que sigan fallando permanecen en la cola. */
+async function pedReintentarPendientes() {
+  const lista = _obtenerPendientesLocal();
+  if (!lista.length) return;
 
-  const btn = document.getElementById('btnAprobar');
-  btn.disabled = true;
-  mostrarCargando(true);
-
-  // Procesar comprobante si existe
-  let comprobanteBase64 = null;
-  let comprobanteNombre = null;
-  let comprobanteTipo   = null;
-  let comprobantePathRemoto = null;
-
-  const comprobanteInput = document.getElementById('verReceiptCapture');
-  if (comprobanteInput?.files?.[0]) {
-    let file = comprobanteInput.files[0];
-    try { file = await _comprimirImagen(file); }
-    catch (err) { console.warn('Compresión fallida, usando original:', err); }
-
-    if (file.size > 5 * 1024 * 1024) {
-      mostrarModalError('La imagen del comprobante no debe superar los 5 MB.');
-      btn.disabled = false;
-      return;
-    }
-    try {
-      comprobanteBase64 = await _fileToBase64(file);
-      comprobanteNombre = file.name;
-      comprobanteTipo   = file.type;
-    } catch (err) {
-      mostrarModalError('No se pudo procesar la imagen del comprobante.');
-      btn.disabled = false;
-      return;
-    }
-  } else if (_qrComprobantePath) {
-    // El comprobante ya fue subido directamente al bucket desde el celular
-    // (vía QR); no hace falta volver a subirlo, solo indicarle su ruta al backend.
-    comprobantePathRemoto = _qrComprobantePath;
+  const btn = document.getElementById('btnReintentarPendientes');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reintentando...';
   }
 
-  const metodo = document.getElementById('verMetodoPago')?.value || 'OTROS';
-  const obs =
-    document.getElementById('verObsOTROS')?.value.trim() ||
-    document.getElementById('verObsED')?.value.trim()    || '';
+  for (const payload of [...lista]) {
+    try {
+      const response = await fetch(BACKEND_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const resultado = await response.json().catch(() => null);
+      if (response.ok && resultado?.status !== 'error') {
+        _quitarPendienteLocal(payload.id_factura);
+      }
+    } catch (err) {
+      // Sigue sin conexión: se deja en la cola para el próximo intento
+    }
+  }
 
-  const payload = {
-    id_factura: _facturaActual.id_factura,
-    estado:     'aprobado',
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-rotate"></i> Reintentar envío';
+  }
+  _actualizarBannerPendientes();
+}
 
-    // Datos de pago actualizados
-    metodo_pago:  metodo,
-    banco:        document.getElementById('verBankSelect')?.value || 'N/A',
-    referencia:   document.getElementById('verPmRef')?.value      || 'N/A',
-    observaciones: obs || 'N/A',
+// ---------------------------------------------------------------------------
+// 8d. Envío del pedido al backend (facturas temporales para verificación)
+// ---------------------------------------------------------------------------
 
-    comprobante_base64: comprobanteBase64,
-    comprobante_nombre: comprobanteNombre,
-    comprobante_tipo:   comprobanteTipo,
-    comprobante_path_remoto: comprobantePathRemoto,
+function _generarIdFacturaPedido() {
+  const sufijo =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID().slice(0, 6)
+      : Math.random().toString(36).slice(2, 8);
+  return 'PED-' + Date.now().toString().slice(-8) + '-' + sufijo;
+}
 
-    // Totales recalculados
-    subtotal_usd:  verState.subtotalUSD,
-    descuento_usd: verState.descuentoUSD,
-    total_usd:     verState.totalUSD,
-    total_bs:      verState.totalBS,
+/** Construye el payload en el mismo formato que espera /api/precargar-factura
+ *  (idéntico al que usa el módulo de facturación por mostrador). */
+function _construirPayloadFactura(pedido) {
+  const c = pedido.cliente;
+  const t = pedido.totales;
+  const tasa = Number(pedido.tasaCambio) || 1;
 
-    // Productos editados
-    productos: verState.productos.map(p => ({
-      nombre:        p.nombre,
-      cantidad:      p.cantidad,
+  if (!pedido.idFactura) {
+    pedido.idFactura = _generarIdFacturaPedido();
+  }
+
+  return {
+    id_factura: pedido.idFactura,
+    nombre: c.nombre || 'Consumidor Final',
+    apellido: c.apellido || '',
+    cedula: c.cedula || 'V-00000000',
+    telefono: (c.telefono || '').replace(/\D/g, '') || 'N/A',
+    vendedor: c.vendedor || localStorage.getItem('vendedorActual') || 'Cajero General',
+    tasa_cambio: tasa,
+    subtotal_usd: t.subtotalUSD,
+    descuento_usd: t.descuentoUSD,
+    total_usd: t.totalUSD,
+    subtotal_bs: t.subtotalUSD * tasa,
+    descuento_bs: t.descuentoUSD * tasa,
+    total_bs: t.totalBS,
+    productos: pedido.productos.map(p => ({
+      nombre: p.nombre,
+      cantidad: p.cantidad,
       precioUnitario: p.precioUnitario,
-      precioTotal:   p.precioTotal,
+      precioTotal: p.precioTotal,
     })),
   };
+}
 
-  try {
-    const res  = await fetch('/api/gestion-temporales', {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
-    const json = await _parseJSON(res);
-    if (!json) { btn.disabled = false; return; }
+function mostrarModalCargandoPedido() {
+  document.getElementById('statusModal').classList.remove('hidden');
+  document.getElementById('modalLoading').classList.remove('hidden');
+  document.getElementById('modalSuccess').classList.add('hidden');
+  document.getElementById('modalError').classList.add('hidden');
+}
 
-    if (json.status === 'success') {
-      _detenerPollingQR();
-      mostrarModalExito('Factura aprobada correctamente. Si el papel se traba o se termina, usa los botones de abajo para reimprimir.');
+function mostrarModalExitoPedido() {
+  document.getElementById('modalLoading').classList.add('hidden');
+  document.getElementById('modalSuccess').classList.remove('hidden');
+  setTimeout(() => {
+    document.getElementById('statusModal').classList.add('hidden');
+  }, 1800);
+}
 
-      // Guardamos los datos para poder reimprimir en cualquier momento
-      // (papel trabado, impresora sin conexión, corte de luz, etc.) sin
-      // tener que reconstruir la factura desde cero.
-      const datosNota = {
-        id_factura:   _facturaActual.id_factura,
-        nombre:       _facturaActual.nombre,
-        apellido:     _facturaActual.apellido,
-        cedula:       _facturaActual.cedula,
-        telefono:     _facturaActual.telefono,
-        vendedor:     _facturaActual.vendedor,
-        metodoPagoTexto: formatMetodoPago(metodo),
-        banco:        payload.banco,
-        referencia:   payload.referencia,
-        productos:    verState.productos,
-        subtotalUSD:  verState.subtotalUSD,
-        descuentoUSD: verState.descuentoUSD,
-        totalUSD:     verState.totalUSD,
-        totalBS:      verState.totalBS,
-        tasaCambio:   Number(verState.tasaCambio) || 1,
-      };
+function mostrarModalErrorPedido(mensaje) {
+  document.getElementById('modalLoading').classList.add('hidden');
+  document.getElementById('modalErrorMessage').textContent = mensaje;
+  document.getElementById('modalError').classList.remove('hidden');
+}
 
-      try {
-        imprimirNotaEntrega(datosNota, 'completa');
-      } catch (errImpresion) {
-        console.warn('No se pudo generar la nota de entrega para imprimir:', errImpresion);
-        mostrarModalError(
-          'La factura se guardó correctamente, pero no se pudo abrir la impresión automática. Usa "Reintentar impresión".',
-          true
-        );
-      }
+function cerrarModalErrorPedido() {
+  document.getElementById('statusModal').classList.add('hidden');
+}
 
-      // Ya NO se recarga automáticamente. El usuario decide cuándo
-      // continuar (botón "Continuar" del modal), para tener todo el
-      // tiempo que necesite si tiene que reimprimir por un fallo de papel,
-      // atasco o desconexión de la impresora.
-    } else {
-      mostrarModalError(json.message || 'No se pudo aprobar la factura.');
-      btn.disabled = false;
-    }
-  } catch (err) {
-    mostrarModalError('Error de conexión: ' + err.message);
-    btn.disabled = false;
+/** Quita de la lista de pedidos activos uno que ya se envió con éxito
+ *  a facturación, y selecciona el siguiente (o crea uno nuevo si era el
+ *  único que había). */
+function _quitarPedidoDeListaActiva(id) {
+  const idx = _pedidos.findIndex(p => p.id === id);
+  if (idx === -1) return;
+
+  _pedidos.splice(idx, 1);
+
+  if (_pedidos.length === 0) {
+    _renderizarListaSidebar();
+    _crearPedido(localStorage.getItem('vendedorActual') || '');
+    return;
   }
-}
 
-/** Se ejecuta cuando el usuario ya terminó de imprimir/reimprimir y confirma. */
-function continuarDespuesDeAprobar() {
-  cerrarModal();
-  limpiarDetalle();
-  window.location.reload();
-}
-
-// ---------------------------------------------------------------------------
-// 9b. Impresión de Nota de Entrega (Original + Copia)
-// ---------------------------------------------------------------------------
-
-// Ancho del rollo térmico en milímetros. Todavía no se tiene la impresora
-// física ni se conoce el ancho real del rollo, así que se deja en 80mm
-// (el más común en impresoras térmicas POS de escritorio). El día que se
-// confirme el ancho real (por ejemplo 58mm), basta con cambiar este valor.
-const ANCHO_ROLLO_MM = 80;
-
-// Guarda los datos de la última nota generada para poder reimprimirla
-// (completa, solo original o solo copia) sin necesidad de volver a aprobar
-// la factura, útil si el papel se traba, se termina a mitad de impresión,
-// o la impresora se queda sin conexión.
-let _ultimaNotaImpresa = null;
-
-function _filaProductoNota(p) {
-  return `
-    <tr>
-      <td>${p.cantidad}</td>
-      <td>${escapeHtml(p.nombre)}</td>
-      <td class="der">$${Number(p.precioTotal).toFixed(2)}</td>
-    </tr>`;
-}
-
-function _construirNotaEntregaHTML(datos, etiqueta) {
-  const fecha = new Date().toLocaleString('es-VE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-
-  const filasProductos = (datos.productos || []).map(_filaProductoNota).join('');
-
-  return `
-    <section class="nota">
-      <div class="nota-tag">${etiqueta}</div>
-      <div class="nota-header">
-        <p class="nota-empresa">Comercial Jenk Cáceres</p>
-        <p>Nota de Entrega</p>
-      </div>
-      <div class="nota-datos">
-        <p><strong>ID:</strong> ${escapeHtml(datos.id_factura)}</p>
-        <p><strong>Fecha:</strong> ${fecha}</p>
-        <p><strong>Cliente:</strong> ${escapeHtml(datos.nombre)} ${escapeHtml(datos.apellido || '')}</p>
-        <p><strong>Cédula:</strong> ${escapeHtml(datos.cedula || 'N/A')}</p>
-        <p><strong>Teléfono:</strong> ${escapeHtml(datos.telefono || 'N/A')}</p>
-        <p><strong>Vendedor:</strong> ${escapeHtml(datos.vendedor || 'N/A')}</p>
-        <p><strong>Método de pago:</strong> ${escapeHtml(datos.metodoPagoTexto || 'N/A')}</p>
-        ${datos.banco && datos.banco !== 'N/A' ? `<p><strong>Banco:</strong> ${escapeHtml(datos.banco)}</p>` : ''}
-        ${datos.referencia && datos.referencia !== 'N/A' ? `<p><strong>Referencia:</strong> ${escapeHtml(datos.referencia)}</p>` : ''}
-      </div>
-      <table class="nota-tabla">
-        <thead><tr><th>Cant</th><th>Producto</th><th class="der">Total $</th></tr></thead>
-        <tbody>${filasProductos}</tbody>
-      </table>
-      <div class="nota-totales">
-        <p><span>Subtotal:</span><span>$${Number(datos.subtotalUSD || 0).toFixed(2)}</span></p>
-        <p><span>Descuento:</span><span>-$${Number(datos.descuentoUSD || 0).toFixed(2)}</span></p>
-        <p class="nota-total-final"><span>TOTAL:</span><span>$${Number(datos.totalUSD || 0).toFixed(2)}</span></p>
-        <p><span>Total Bs:</span><span>Bs ${Number(datos.totalBS || 0).toFixed(2)}</span></p>
-        <p class="nota-tasa">Tasa: ${Number(datos.tasaCambio || 1).toFixed(2)} Bs/$</p>
-      </div>
-      <p class="nota-firma">_____________________________<br>Firma de conformidad</p>
-    </section>`;
-}
-
-/**
- * Genera e imprime la nota de entrega.
- * @param {Object} datos - datos de la factura aprobada
- * @param {'completa'|'original'|'copia'} modo - qué copias imprimir.
- *        'completa' imprime Original + Copia en el mismo ticket (por
- *        defecto). 'original' o 'copia' imprimen solo esa parte, útil
- *        para reimprimir solo lo que faltó si el papel se acabó a la mitad.
- */
-function imprimirNotaEntrega(datos, modo = 'completa') {
-  _ultimaNotaImpresa = datos;
-
-  let contenido;
-  if (modo === 'original') {
-    contenido = _construirNotaEntregaHTML(datos, 'ORIGINAL');
-  } else if (modo === 'copia') {
-    contenido = _construirNotaEntregaHTML(datos, 'COPIA');
+  if (_pedidoActual?.id === id) {
+    const siguiente = _pedidos[Math.min(idx, _pedidos.length - 1)];
+    _renderizarListaSidebar();
+    _seleccionarPedido(siguiente);
   } else {
-    contenido = `
-      ${_construirNotaEntregaHTML(datos, 'ORIGINAL')}
-      <div class="corte">&#9986; - - - - - - - - - - - - - - - - &#9986;</div>
-      ${_construirNotaEntregaHTML(datos, 'COPIA')}`;
+    _renderizarListaSidebar();
   }
+  _guardarBorradorLocal();
+}
 
-  const html = `<!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Nota de Entrega ${escapeHtml(datos.id_factura)}</title>
-        <style>
-          @page { size: ${ANCHO_ROLLO_MM}mm auto; margin: 2mm; }
-          * { box-sizing: border-box; }
-          body {
-            width: ${ANCHO_ROLLO_MM}mm;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            color: #000;
-            margin: 0;
-          }
-          .nota { padding: 4px 2px; }
-          .nota-tag {
-            text-align: center; font-weight: bold; font-size: 12px;
-            border: 1px solid #000; padding: 2px 0; margin-bottom: 6px;
-          }
-          .nota-header { text-align: center; margin-bottom: 6px; }
-          .nota-empresa { font-weight: bold; font-size: 13px; margin: 0; }
-          .nota-datos p { margin: 1px 0; }
-          .nota-tabla { width: 100%; border-collapse: collapse; margin: 6px 0; }
-          .nota-tabla th, .nota-tabla td { text-align: left; padding: 1px 2px; font-size: 10px; }
-          .der { text-align: right; }
-          .nota-totales p { display: flex; justify-content: space-between; margin: 1px 0; }
-          .nota-total-final { font-weight: bold; font-size: 12px; border-top: 1px dashed #000; padding-top: 2px; }
-          .nota-tasa { font-size: 9px; text-align: right; color: #333; }
-          .nota-firma { margin-top: 14px; font-size: 10px; text-align: center; }
-          .corte { border-top: 1px dashed #000; margin: 10px 0; text-align: center; font-size: 9px; }
-        </style>
-      </head>
-      <body>${contenido}</body>
-    </html>`;
-
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right  = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width  = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  document.body.appendChild(iframe);
-
-  let yaDisparado = false;
-  const dispararImpresion = () => {
-    if (yaDisparado) return;
-    yaDisparado = true;
-    try {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    } catch (e) {
-      console.warn('No se pudo abrir el diálogo de impresión:', e);
-      mostrarModalError(
-        'No se pudo abrir el diálogo de impresión (¿hay una impresora conectada?). Puedes reintentar cuando quieras.',
-        true
-      );
-    }
-    const limpiar = () => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); };
-    if (iframe.contentWindow) iframe.contentWindow.onafterprint = limpiar;
-    setTimeout(limpiar, 6000);
-  };
-
-  // Camino normal: se dispara cuando el iframe termina de cargar el HTML.
-  iframe.onload = dispararImpresion;
-
-  // Salvavidas: en algunos navegadores el 'onload' de un iframe cuyo
-  // contenido se escribió con document.write no siempre se dispara de
-  // forma confiable. Si en 800ms no ha pasado nada, se intenta de todos
-  // modos para no dejar al usuario esperando sin diálogo de impresión.
-  setTimeout(dispararImpresion, 800);
+async function _enviarFacturaAlBackend(payload, pedidoId) {
+  const boton = document.getElementById('btnEnviarPedido');
+  if (boton) boton.disabled = true;
+  mostrarModalCargandoPedido();
 
   try {
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-  } catch (e) {
-    console.error('No se pudo generar el contenido de la nota de entrega:', e);
-    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    mostrarModalError('No se pudo generar la nota de entrega. Puedes reintentar cuando quieras.', true);
-  }
-}
+    const response = await fetch(BACKEND_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-/**
- * Reimprime la última nota generada (completa, solo original o solo copia).
- * Pensado para cuando el papel se traba, se acaba a mitad de impresión,
- * o la impresora falla y hay que volver a intentarlo.
- */
-function reimprimirNota(modo = 'completa') {
-  if (!_ultimaNotaImpresa) {
-    alert('Todavía no se ha generado ninguna nota de entrega para reimprimir.');
-    return;
-  }
-  imprimirNotaEntrega(_ultimaNotaImpresa, modo);
-}
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('El servidor no devolvió una respuesta JSON válida');
+    }
 
-// ---------------------------------------------------------------------------
-// Filtro de búsqueda
-// ---------------------------------------------------------------------------
-function filtrarFacturas() {
-  const q = document.getElementById('inputBusqueda').value.toLowerCase().trim();
-  if (!q) { renderizarLista(_facturasPendientes); return; }
+    const resultado = await response.json();
+    if (!response.ok || resultado.status === 'error') {
+      throw new Error(resultado.message || 'Error desconocido del servidor');
+    }
 
-  const filtradas = _facturasPendientes.filter(f =>
-    (f.id_factura || '').toLowerCase().includes(q) ||
-    (f.cedula     || '').toLowerCase().includes(q) ||
-    (f.nombre     || '').toLowerCase().includes(q) ||
-    (f.apellido   || '').toLowerCase().includes(q)
-  );
-
-  const lista = document.getElementById('listaPendientes');
-  if (!filtradas.length) {
-    lista.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-magnifying-glass"></i>
-        <p>Sin resultados para<br>"${escapeHtml(q)}"</p>
-      </div>`;
-    return;
-  }
-
-  lista.innerHTML = filtradas.map(f => {
-    const idx = _facturasPendientes.indexOf(f);
-    return `
-      <div class="factura-card" data-index="${idx}" onclick="seleccionarFactura(${idx})">
-        <div class="factura-card-info">
-          <p class="factura-card-id">ID: ${escapeHtml(f.id_factura)}</p>
-          <p class="factura-card-meta">
-            ${escapeHtml(f.nombre || '')} ${escapeHtml(f.apellido || '')}
-            ${f.cedula ? '· ' + escapeHtml(f.cedula) : ''}
-          </p>
-        </div>
-        <span class="factura-card-total">$${Number(f.total_usd || 0).toFixed(2)}</span>
-      </div>`;
-  }).join('');
-
-  if (_facturaActual) {
-    const idxActual = _facturasPendientes.indexOf(_facturaActual);
-    document.querySelectorAll('.factura-card').forEach(el =>
-      el.classList.toggle('activa', parseInt(el.dataset.index) === idxActual)
+    _quitarPendienteLocal(payload.id_factura);
+    mostrarModalExitoPedido();
+    _quitarPedidoDeListaActiva(pedidoId);
+  } catch (error) {
+    console.error('Error al enviar el pedido a facturación:', error);
+    // Se guarda localmente para no perder el pedido; se reintentará solo
+    // más adelante (al recargar la página o al recuperar conexión), o el
+    // usuario puede forzar el reintento desde el banner.
+    _agregarOActualizarPendienteLocal(payload);
+    mostrarModalErrorPedido(
+      `${error.message}. El pedido se guardó localmente y se reintentará el envío automáticamente.`,
     );
+  } finally {
+    if (boton) boton.disabled = false;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers UI
-// ---------------------------------------------------------------------------
-function limpiarDetalle() {
-  _facturaActual = null;
-  _detenerPollingQR();
-  document.getElementById('detailEmpty').classList.remove('hidden');
-  document.getElementById('detailContent').classList.add('hidden');
-  document.querySelectorAll('.factura-card').forEach(el => el.classList.remove('activa'));
+/** Valida que TODOS los campos obligatorios del pedido estén completos y con
+ *  un formato correcto antes de poder enviarlo a facturación. Devuelve un
+ *  mensaje de error (string) si algo falta, o null si todo está en orden. */
+function _validarCamposObligatorios(pedido) {
+  const c = pedido.cliente;
+
+  if (!pedido.productos.length) {
+    return 'Agrega al menos un producto antes de enviar el pedido.';
+  }
+
+  if (!c.nombre.trim()) {
+    return 'El nombre del cliente es obligatorio.';
+  }
+  if (!c.apellido.trim()) {
+    return 'El apellido del cliente es obligatorio.';
+  }
+
+  const cedulaDigitos = (c.cedula || '').replace(/\D/g, '');
+  if (!cedulaDigitos) {
+    return 'La cédula del cliente es obligatoria.';
+  }
+  if (cedulaDigitos.length < 6 || cedulaDigitos.length > 9) {
+    return 'La cédula ingresada no es válida (debe tener entre 6 y 9 dígitos).';
+  }
+
+  const telefonoDigitos = (c.telefono || '').replace(/\D/g, '');
+  if (!telefonoDigitos) {
+    return 'El teléfono del cliente es obligatorio.';
+  }
+  if (telefonoDigitos.length !== 11) {
+    return 'El teléfono ingresado no es válido (debe tener 11 dígitos, ej: 0412-345-6789).';
+  }
+
+  if (!c.vendedor.trim()) {
+    return 'El nombre del vendedor es obligatorio.';
+  }
+
+  return null;
 }
 
-/** Habilita/deshabilita el botón "Aprobar pago" según si falta el comprobante
- *  para los métodos que lo requieren (PM y OTROS). Para el resto de métodos,
- *  el botón queda habilitado y la validación completa ocurre al hacer clic. */
-function _actualizarEstadoBotonAprobar() {
-  const btn = document.getElementById('btnAprobar');
-  if (!btn) return;
+/** Acción principal: envía el pedido activo a facturación (como factura
+ *  temporal) en lugar de abrir WhatsApp. Queda pendiente de verificación
+ *  en el módulo de facturación. */
+async function pedEnviarAFacturacion() {
+  if (!_pedidoActual) return;
 
-  const metodo = document.getElementById('verMetodoPago')?.value;
-  const requiereComprobante = metodo === 'PM' || metodo === 'OTROS';
+  _guardarEstadoFormulario(_pedidoActual);
+  _recalcularTotales();
 
-  if (!requiereComprobante) {
-    btn.disabled = false;
+  const errorValidacion = _validarCamposObligatorios(_pedidoActual);
+  if (errorValidacion) {
+    alert(errorValidacion);
     return;
   }
 
-  const tieneArchivoLocal = !!document.getElementById('verReceiptCapture')?.files?.length;
-  const tieneComprobante  = tieneArchivoLocal || !!_qrComprobantePath;
-
-  btn.disabled = !tieneComprobante;
+  const payload = _construirPayloadFactura(_pedidoActual);
+  await _enviarFacturaAlBackend(payload, _pedidoActual.id);
 }
 
-function _actualizarTotalesUI(subTotalUSD = 0, descuentoUSD = 0, totalUSD = 0, totalBS = 0) {
-  // Conversión segura a número
-  const subUSD = Number(subTotalUSD) || 0;
-  const descUSD = Number(descuentoUSD) || 0;
-  const totUSD = Number(totalUSD) || 0;
-  const totBS = Number(totalBS) || 0;
+/** Confirmar envío desde el modal de vista previa (reemplaza el antiguo
+ *  "Abrir WhatsApp"). Si se ingresó un teléfono en el modal, se guarda
+ *  también en los datos del cliente. */
+function pedConfirmarEnvioDesdeModal() {
+  const inputTel = document.getElementById('modalWaPhone');
+  const numLimpio = (inputTel?.value || '').replace(/\D/g, '');
 
-  // Selección de elementos del DOM (IDs reales usados en verificacion.html)
-  const elSubtotal  = document.getElementById("totSubtotalUsd");
-  const elDescuento = document.getElementById("totDescuento");
-  const elTotalUSD  = document.getElementById("totTotalUsd");
-  const elTotalBS   = document.getElementById("totTotalBs");
+  if (_pedidoActual && numLimpio) {
+    _pedidoActual.cliente.telefono = numLimpio;
+    const campoTelefono = document.getElementById('pedTelefono');
+    if (campoTelefono) campoTelefono.value = numLimpio;
+  }
 
-  // Formateo y renderizado
-  if (elSubtotal)  elSubtotal.textContent  = typeof fmtUSD === "function" ? fmtUSD(subUSD)  : `$${subUSD.toFixed(2)}`;
-  if (elDescuento) elDescuento.textContent = (typeof fmtUSD === "function" ? `-${fmtUSD(descUSD)}` : `-$${descUSD.toFixed(2)}`);
-  if (elTotalUSD)  elTotalUSD.textContent  = typeof fmtUSD === "function" ? fmtUSD(totUSD)  : `$${totUSD.toFixed(2)}`;
-  if (elTotalBS)   elTotalBS.textContent   = typeof fmtBS === "function"  ? `Bs ${fmtBS(totBS)}` : `Bs ${totBS.toFixed(2)}`;
+  pedCerrarVistaPrevia();
+  pedEnviarAFacturacion();
 }
 
+// ---------------------------------------------------------------------------
+// 9. Vista previa modal
+// ---------------------------------------------------------------------------
+function pedAbrirVistaPrevia() {
+  if (!_pedidoActual) return;
+
+  // Guardar estado antes de mostrar
+  _guardarEstadoFormulario(_pedidoActual);
+  _recalcularTotales();
+
+  const msg = _generarMensajeWhatsApp(_pedidoActual);
+
+  // Renderizar burbuja
+  const bubble = document.getElementById('waBubbleContent');
+  // Convertir asteriscos a negrita y saltos de línea a <br>
+  bubble.innerHTML = msg
+    .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+    .replace(/_([^_]+)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+
+  // Hora actual
+  const hora = new Date().toLocaleTimeString('es-VE', { hour:'2-digit', minute:'2-digit' });
+  document.getElementById('waBubbleTime').textContent = hora;
+
+  // Pre-cargar teléfono del cliente si existe
+  const tel = _pedidoActual.cliente.telefono || '';
+  const numLimpio = tel.replace(/\D/g, '').replace(/^58/, '').replace(/^0/, '');
+  document.getElementById('modalWaPhone').value = numLimpio;
+
+  // Mostrar modal
+  document.getElementById('modalPreview').classList.remove('hidden');
+}
+
+function pedCerrarVistaPrevia() {
+  document.getElementById('modalPreview').classList.add('hidden');
+  // Reset botón copiar
+  const btn = document.getElementById('btnCopyMsg');
+  btn.innerHTML = '<i class="fas fa-copy"></i> Copiar';
+  btn.classList.remove('copied');
+}
+
+// Cerrar modal al hacer click fuera
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('modalPreview').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modalPreview')) pedCerrarVistaPrevia();
+  });
+});
+
+/** Copia el mensaje al portapapeles */
+async function pedCopiarMensaje() {
+  if (!_pedidoActual) return;
+  _guardarEstadoFormulario(_pedidoActual);
+  _recalcularTotales();
+
+  const msg = _generarMensajeWhatsApp(_pedidoActual);
+
+  try {
+    await navigator.clipboard.writeText(msg);
+    const btn = document.getElementById('btnCopyMsg');
+    btn.innerHTML = '<i class="fas fa-check"></i> ¡Copiado!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.innerHTML = '<i class="fas fa-copy"></i> Copiar';
+      btn.classList.remove('copied');
+    }, 2500);
+  } catch (err) {
+    alert('No se pudo copiar al portapapeles. Intenta manualmente.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 10. Helpers
+// ---------------------------------------------------------------------------
 function _limpiarFormAgregar() {
-  ['verCantProduct', 'verNameProduct', 'verPrcUndProduct', 'verPrcTotalProduct']
+  ['pedCantProduct', 'pedNombreProduct', 'pedPrcUndProduct', 'pedPrcTotalProduct']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
 }
 
-function setListaEstado(estado, mensaje = '') {
-  const lista = document.getElementById('listaPendientes');
-  if (estado === 'loading') {
-    lista.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-circle-notch fa-spin"></i>
-        <p>Cargando…</p>
-      </div>`;
-  } else if (estado === 'error') {
-    lista.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-triangle-exclamation"></i>
-        <p>${escapeHtml(mensaje)}</p>
-      </div>`;
-  }
-}
-
-function formatMetodoPago(codigo) {
-  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D', PVC: 'Pago V/C',
-                ED: 'Efectivo $', EBS: 'Efectivo Bs', OTROS: 'Otro' };
-  return map[codigo] || codigo || 'N/A';
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-async function _parseJSON(res) {
-  const texto = await res.text();
-  try { return JSON.parse(texto); }
-  catch {
-    console.error('Respuesta no válida del servidor:', texto);
-    mostrarModalError('El servidor no devolvió una respuesta válida.');
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Modales
-// ---------------------------------------------------------------------------
-function mostrarCargando(mostrar) {
-  const modal   = document.getElementById('statusModal');
-  const loading = document.getElementById('modalLoading');
-  const success = document.getElementById('modalSuccess');
-  const error   = document.getElementById('modalError');
-
-  if (mostrar) {
-    modal.classList.remove('hidden');
-    loading.classList.remove('hidden');
-    success.classList.add('hidden');
-    error.classList.add('hidden');
-  } else {
-    modal.classList.add('hidden');
-  }
-}
-
-function mostrarModalExito(mensaje) {
-  document.getElementById('statusModal').classList.remove('hidden');
-  document.getElementById('modalLoading').classList.add('hidden');
-  document.getElementById('modalSuccess').classList.remove('hidden');
-  document.getElementById('modalError').classList.add('hidden');
-  document.getElementById('modalSuccessMessage').textContent = mensaje;
-}
-
-function mostrarModalError(mensaje, conReintentoImpresion = false) {
-  document.getElementById('statusModal').classList.remove('hidden');
-  document.getElementById('modalLoading').classList.add('hidden');
-  document.getElementById('modalSuccess').classList.add('hidden');
-  document.getElementById('modalError').classList.remove('hidden');
-  document.getElementById('modalErrorMessage').textContent = mensaje;
-
-  const accionesImpresion = document.getElementById('modalErrorPrintActions');
-  if (accionesImpresion) accionesImpresion.classList.toggle('hidden', !conReintentoImpresion);
-}
-
-function cerrarModal()      { document.getElementById('statusModal').classList.add('hidden'); }
-function cerrarModalError() { cerrarModal(); }
-
 // ---------------------------------------------------------------------------
 // Exposición global
 // ---------------------------------------------------------------------------
-window.seleccionarFactura    = seleccionarFactura;
-window.verAgregarProducto    = verAgregarProducto;
-window.verSelectMetodoPago   = verSelectMetodoPago;
-window.verPreviewReceipt     = verPreviewReceipt;
-window.verGenerarQR          = verGenerarQR;
-window.aprobarFacturaActual  = aprobarFacturaActual;
-window.cerrarModalError      = cerrarModalError;
-window.imprimirNotaEntrega   = imprimirNotaEntrega;
-window.reimprimirNota        = reimprimirNota;
-window.continuarDespuesDeAprobar = continuarDespuesDeAprobar;
+window.pedNuevoPedido              = pedNuevoPedido;
+window.pedEliminarPedido           = pedEliminarPedido;
+window.pedSeleccionarPorId         = pedSeleccionarPorId;
+window.pedSyncCliente              = pedSyncCliente;
+window.pedActualizarTasa           = pedActualizarTasa;
+window.pedAgregarProducto          = pedAgregarProducto;
+window.pedAbrirVistaPrevia         = pedAbrirVistaPrevia;
+window.pedCerrarVistaPrevia        = pedCerrarVistaPrevia;
+window.pedCopiarMensaje            = pedCopiarMensaje;
+window.pedRefrescarTasa            = pedRefrescarTasa;
+window.pedReintentarPendientes     = pedReintentarPendientes;
+window.pedEnviarAFacturacion       = pedEnviarAFacturacion;
+window.pedConfirmarEnvioDesdeModal = pedConfirmarEnvioDesdeModal;
+window.cerrarModalErrorPedido      = cerrarModalErrorPedido;
+window.formatText                  = formatText;
+window.formatDoc                   = formatDoc;
+window.formatPhone                 = formatPhone;
