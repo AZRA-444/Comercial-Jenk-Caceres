@@ -1039,18 +1039,50 @@ async function pedCopiarMensaje() {
 
 function pedEnviarWhatsApp() {
   if (!_pedidoActual) return;
+
+  const modalPreview = document.getElementById('modalPreview');
+  const modalAbierto = !modalPreview.classList.contains('hidden');
+
+  let numLimpio;
+
+  if (modalAbierto) {
+    // El modal ya está abierto: usar el número que el usuario escribió ahí
+    const inputTel = document.getElementById('modalWaPhone');
+    numLimpio = (inputTel?.value || '').replace(/\D/g, '');
+  } else {
+    _guardarEstadoFormulario(_pedidoActual);
+    _recalcularTotales();
+    const tel = _pedidoActual.cliente.telefono || '';
+    numLimpio = tel.replace(/\D/g, '').replace(/^58/, '').replace(/^0/, '');
+  }
+
+  // Si no hay un número válido, abrir (o mantener abierto) el modal para pedirlo
+  if (numLimpio.length < 10) {
+    if (!modalAbierto) {
+      pedAbrirVistaPrevia();
+    } else {
+      alert('Ingresa un número de WhatsApp válido (10 dígitos, ej: 4121234567).');
+    }
+    return;
+  }
+
+  // Guardar el número en los datos del cliente
+  _pedidoActual.cliente.telefono = numLimpio;
+  const campoTelefono = document.getElementById('pedTelefono');
+  if (campoTelefono) campoTelefono.value = numLimpio;
+
   _guardarEstadoFormulario(_pedidoActual);
   _recalcularTotales();
 
-  const tel = _pedidoActual.cliente.telefono || '';
-  const numLimpio = tel.replace(/\D/g, '').replace(/^0/, '');
+  const msg = _generarMensajeWhatsApp(_pedidoActual);
+  _abrirWhatsApp(numLimpio, msg);
+}
 
-  // Si tiene teléfono, abrir directamente; si no, abrir modal para pedirlo
-  if (numLimpio.length >= 10) {
-    _abrirWhatsApp(numLimpio);
-  } else {
-    pedAbrirVistaPrevia();
-  }
+/** Abre WhatsApp (app o web) con el número y el mensaje ya escritos. */
+function _abrirWhatsApp(numero, mensaje) {
+  const numeroSinPrefijo = numero.replace(/\D/g, '').replace(/^58/, '').replace(/^0/, '');
+  const url = `https://wa.me/58${numeroSinPrefijo}?text=${encodeURIComponent(mensaje)}`;
+  window.open(url, '_blank');
 }
 
 // ---------------------------------------------------------------------------
