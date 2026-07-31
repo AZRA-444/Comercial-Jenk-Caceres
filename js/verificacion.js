@@ -859,7 +859,7 @@ function continuarDespuesDeAprobar() {
 // Si en algún momento se cambia de impresora a una de 80mm, basta con
 // cambiar este valor (y los tamaños de fuente en imprimirNotaEntrega,
 // pensados para el ancho imprimible de ~48-50mm que deja un rollo de 58mm).
-const ANCHO_ROLLO_MM = 58;
+const ANCHO_ROLLO_MM = 57;
 
 // Guarda los datos de la última nota generada para poder reimprimirla
 // (completa, solo original o solo copia) sin necesidad de volver a aprobar
