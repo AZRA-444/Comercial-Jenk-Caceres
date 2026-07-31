@@ -156,7 +156,9 @@ function imprimirDocumento(html) {
   doc.close();
 }
 
-// Plantilla base para reportes en tamaño ticket (impresora térmica 80mm)
+// Plantilla base para reportes en tamaño ticket.
+// Impresora térmica: Roccia RC-5801, rollo de 58mm (~48-50mm imprimibles).
+const ANCHO_TICKET_MM = 58;
 function plantillaTicket(tituloDoc, contenidoHTML) {
   return `<!doctype html>
     <html>
@@ -164,21 +166,21 @@ function plantillaTicket(tituloDoc, contenidoHTML) {
         <meta charset="utf-8"/>
         <title>${escapeHtml(tituloDoc)}</title>
         <style>
-          @page { size: 80mm auto; margin: 2mm; }
+          @page { size: ${ANCHO_TICKET_MM}mm auto; margin: 1.5mm; }
           * { box-sizing: border-box; }
-          body { width: 80mm; font-family: 'Courier New', monospace; font-size: 11px; color: #000; margin: 0; }
-          .doc { padding: 4px 2px; }
-          .doc-tag { text-align: center; font-weight: bold; font-size: 12px; border: 1px solid #000; padding: 3px 0; margin-bottom: 6px; }
-          .doc-header { text-align: center; margin-bottom: 6px; }
-          .doc-empresa { font-weight: bold; font-size: 13px; margin: 0; }
-          .doc-datos p { margin: 1px 0; }
-          .doc-tabla { width: 100%; border-collapse: collapse; margin: 6px 0; }
-          .doc-tabla th, .doc-tabla td { text-align: left; padding: 1px 2px; font-size: 10px; }
+          body { width: ${ANCHO_TICKET_MM}mm; font-family: 'Courier New', monospace; font-size: 9.5px; color: #000; margin: 0; }
+          .doc { padding: 2px 1px; }
+          .doc-tag { text-align: center; font-weight: bold; font-size: 10.5px; border: 1px solid #000; padding: 2px 0; margin-bottom: 5px; }
+          .doc-header { text-align: center; margin-bottom: 5px; }
+          .doc-empresa { font-weight: bold; font-size: 11px; margin: 0; }
+          .doc-datos p { margin: 1px 0; word-break: break-word; }
+          .doc-tabla { width: 100%; border-collapse: collapse; margin: 5px 0; }
+          .doc-tabla th, .doc-tabla td { text-align: left; padding: 1px; font-size: 8.5px; overflow-wrap: break-word; }
           .der { text-align: right; }
           .doc-totales p { display: flex; justify-content: space-between; margin: 1px 0; }
-          .doc-total-final { font-weight: bold; font-size: 12px; border-top: 1px dashed #000; padding-top: 2px; }
-          .doc-sep { border-top: 1px dashed #000; margin: 8px 0; }
-          .doc-firma { margin-top: 14px; font-size: 10px; text-align: center; }
+          .doc-total-final { font-weight: bold; font-size: 10.5px; border-top: 1px dashed #000; padding-top: 2px; }
+          .doc-sep { border-top: 1px dashed #000; margin: 6px 0; }
+          .doc-firma { margin-top: 12px; font-size: 8.5px; text-align: center; }
         </style>
       </head>
       <body>${contenidoHTML}</body>
@@ -380,9 +382,9 @@ async function imprimirCierreCaja() {
         <p><span>TOTAL Bs:</span><span>Bs ${cc.totalBs.toFixed(2)}</span></p>
       </div>
       <div class="doc-firma">
-        _____________________________<br>Firma del cajero
+        ______________________<br>Firma del cajero
         <br><br>
-        _____________________________<br>Firma del supervisor
+        ______________________<br>Firma del supervisor
       </div>
     </div>`;
 

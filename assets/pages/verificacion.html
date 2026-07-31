@@ -217,14 +217,8 @@
           <h3>¡Aprobado!</h3>
           <p id="modalSuccessMessage">La operación se completó correctamente.</p>
           <div class="modal-print-actions">
-            <button type="button" class="btn-secondary" onclick="reimprimirNota('completa')">
-              <i class="fas fa-print"></i> Reimprimir (Original + Copia)
-            </button>
-            <button type="button" class="btn-secondary" onclick="reimprimirNota('original')">
-              Solo Original
-            </button>
-            <button type="button" class="btn-secondary" onclick="reimprimirNota('copia')">
-              Solo Copia
+            <button type="button" class="btn-secondary" onclick="reimprimirNota()">
+              <i class="fas fa-print"></i> Reimprimir nota de entrega
             </button>
           </div>
           <button type="button" onclick="continuarDespuesDeAprobar()" class="btn-cerrar-modal">Continuar</button>
@@ -234,7 +228,7 @@
           <h3>Ocurrió un error</h3>
           <p id="modalErrorMessage">No se pudo completar la acción.</p>
           <div id="modalErrorPrintActions" class="modal-print-actions hidden">
-            <button type="button" class="btn-secondary" onclick="reimprimirNota('completa')">
+            <button type="button" class="btn-secondary" onclick="reimprimirNota()">
               <i class="fas fa-print"></i> Reintentar impresión
             </button>
           </div>
