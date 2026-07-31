@@ -855,16 +855,9 @@ function continuarDespuesDeAprobar() {
 // 9b. Impresión de Nota de Entrega (Original + Copia)
 // ---------------------------------------------------------------------------
 
-// Ancho del rollo térmico en milímetros. Impresora: Roccia RC-5801 (58mm).
-// Si en algún momento se cambia de impresora a una de 80mm, basta con
-// cambiar este valor (y los tamaños de fuente en imprimirNotaEntrega,
-// pensados para el ancho imprimible de ~48-50mm que deja un rollo de 58mm).
 const ANCHO_ROLLO_MM = 57;
 
 // Guarda los datos de la última nota generada para poder reimprimirla
-// (completa, solo original o solo copia) sin necesidad de volver a aprobar
-// la factura, útil si el papel se traba, se termina a mitad de impresión,
-// o la impresora se queda sin conexión.
 let _ultimaNotaImpresa = null;
 
 function _filaProductoNota(p) {
@@ -888,7 +881,7 @@ function _construirNotaEntregaHTML(datos) {
     <section class="nota">
       <div class="nota-header">
         <p class="nota-empresa">Comercial Jenk Cáceres</p>
-        <p>Nota de Entrega</p>
+        <p class="nota-titulo">Nota de Entrega</p>
       </div>
       <div class="nota-datos">
         <p><strong>ID:</strong> ${escapeHtml(datos.id_factura)}</p>
@@ -905,23 +898,19 @@ function _construirNotaEntregaHTML(datos) {
         <thead><tr><th>Cant</th><th>Producto</th><th class="der">Total $</th></tr></thead>
         <tbody>${filasProductos}</tbody>
       </table>
-      <div class="nota-totales">
-        <p><span>Subtotal:</span><span>$${Number(datos.subtotalUSD || 0).toFixed(2)}</span></p>
-        <p><span>Descuento:</span><span>-$${Number(datos.descuentoUSD || 0).toFixed(2)}</span></p>
-        <p class="nota-total-final"><span>TOTAL:</span><span>$${Number(datos.totalUSD || 0).toFixed(2)}</span></p>
-        <p><span>Total Bs:</span><span>Bs ${Number(datos.totalBS || 0).toFixed(2)}</span></p>
-        <p class="nota-tasa">Tasa: ${Number(datos.tasaCambio || 1).toFixed(2)} Bs/$</p>
-      </div>
+      
+      <table class="nota-totales-tabla">
+        <tr><td>Subtotal:</td><td class="der">$${Number(datos.subtotalUSD || 0).toFixed(2)}</td></tr>
+        <tr><td>Descuento:</td><td class="der">-$${Number(datos.descuentoUSD || 0).toFixed(2)}</td></tr>
+        <tr class="nota-total-final"><td>TOTAL:</td><td class="der">$${Number(datos.totalUSD || 0).toFixed(2)}</td></tr>
+        <tr><td>Total Bs:</td><td class="der">Bs ${Number(datos.totalBS || 0).toFixed(2)}</td></tr>
+      </table>
+
+      <p class="nota-tasa">Tasa: ${Number(datos.tasaCambio || 1).toFixed(2)} Bs/$</p>
       <p class="nota-firma">______________________<br>Firma de conformidad</p>
     </section>`;
 }
 
-/**
- * Manda a imprimir UNA sola copia de la nota de entrega (sin banner de
- * "Original"/"Copia" — ya no se distingue entre ellas). Al terminar de
- * imprimir (o tras el timeout de seguridad) llama a `alTerminar`, que es
- * donde `imprimirNotaEntrega` pregunta si se necesita una segunda copia.
- */
 function _imprimirUnaCopiaNota(datos, alTerminar) {
   const contenido = _construirNotaEntregaHTML(datos);
 
@@ -931,28 +920,72 @@ function _imprimirUnaCopiaNota(datos, alTerminar) {
         <meta charset="utf-8" />
         <title>Nota de Entrega ${escapeHtml(datos.id_factura)}</title>
         <style>
-          @page { size: ${ANCHO_ROLLO_MM}mm auto; margin: 1.5mm; }
-          * { box-sizing: border-box; }
-          body {
-            width: ${ANCHO_ROLLO_MM}mm;
-            font-family: 'Courier New', monospace;
-            font-size: 9.5px;
-            color: #000;
-            margin: 0;
+          /* 1. Eliminamos márgenes del navegador para controlar el centrado nosotros */
+          @page { 
+            size: ${ANCHO_ROLLO_MM}mm auto; 
+            margin: 0mm; 
           }
-          .nota { padding: 2px 1px; }
-          .nota-header { text-align: center; margin-bottom: 5px; }
-          .nota-empresa { font-weight: bold; font-size: 11px; margin: 0; }
-          .nota-datos p { margin: 1px 0; word-break: break-word; }
-          .nota-tabla { width: 100%; border-collapse: collapse; margin: 5px 0; table-layout: fixed; }
-          .nota-tabla th, .nota-tabla td { text-align: left; padding: 1px; font-size: 8.5px; overflow-wrap: break-word; }
-          .nota-tabla th:first-child, .nota-tabla td:first-child { width: 14%; }
-          .nota-tabla th:last-child, .nota-tabla td:last-child { width: 26%; }
-          .der { text-align: right; }
-          .nota-totales p { display: flex; justify-content: space-between; margin: 1px 0; }
-          .nota-total-final { font-weight: bold; font-size: 10.5px; border-top: 1px dashed #000; padding-top: 2px; }
-          .nota-tasa { font-size: 8px; text-align: right; color: #333; }
-          .nota-firma { margin-top: 12px; font-size: 8.5px; text-align: center; }
+          
+          * { 
+            box-sizing: border-box; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+          }
+
+          body {
+            /* 2. Ancho útil real de impresión (49mm) centrado en el papel de 57mm */
+            width: 49mm;
+            margin: 0 auto;
+            padding: 2mm 0;
+            
+            /* 3. Fuente sin serifas gruesa optimizada para cabezales térmicos de 203 DPI */
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 9.5px;
+            font-weight: 600; /* Mayor densidad de calor */
+            color: #000000;
+            line-height: 1.2;
+          }
+
+          .nota { width: 100%; }
+          .nota-header { text-align: center; margin-bottom: 4px; }
+          .nota-empresa { font-weight: 900; font-size: 12px; margin: 0 0 2px 0; text-transform: uppercase; }
+          .nota-titulo { font-size: 10px; font-weight: bold; margin: 0; }
+          
+          .nota-datos { 
+            border-top: 1px dashed #000; 
+            border-bottom: 1px dashed #000; 
+            padding: 3px 0; 
+            margin: 4px 0; 
+          }
+          .nota-datos p { margin: 1.5px 0; word-break: break-word; font-size: 9px; }
+          
+          /* Tabla de productos alineada */
+          .nota-tabla { width: 100%; border-collapse: collapse; margin: 4px 0; table-layout: fixed; }
+          .nota-tabla th, .nota-tabla td { text-align: left; padding: 2px 0; font-size: 9px; vertical-align: top; }
+          .nota-tabla th { font-weight: 900; border-bottom: 1px solid #000; }
+          .nota-tabla th:nth-child(1), .nota-tabla td:nth-child(1) { width: 14%; }
+          .nota-tabla th:nth-child(2), .nota-tabla td:nth-child(2) { width: 56%; }
+          .nota-tabla th:nth-child(3), .nota-tabla td:nth-child(3) { width: 30%; }
+          .der { text-align: right !important; }
+          
+          /* Tabla de Totales (reemplaza a flexbox para evitar errores de alineación) */
+          .nota-totales-tabla { width: 100%; border-collapse: collapse; margin-top: 4px; }
+          .nota-totales-tabla td { padding: 1.5px 0; font-size: 9px; }
+          .nota-total-final td { 
+            font-weight: 900; 
+            font-size: 11px; 
+            border-top: 1px dashed #000; 
+            padding-top: 3px; 
+          }
+          
+          .nota-tasa { font-size: 8px; text-align: right; margin-top: 3px; font-weight: normal; }
+          .nota-firma { margin-top: 15px; font-size: 8.5px; text-align: center; font-weight: normal; }
         </style>
       </head>
       <body>${contenido}</body>
@@ -974,6 +1007,7 @@ function _imprimirUnaCopiaNota(datos, alTerminar) {
     yaTerminado = true;
     if (typeof alTerminar === 'function') alTerminar();
   };
+
   const dispararImpresion = () => {
     if (yaDisparado) return;
     yaDisparado = true;
@@ -982,10 +1016,9 @@ function _imprimirUnaCopiaNota(datos, alTerminar) {
       iframe.contentWindow.print();
     } catch (e) {
       console.warn('No se pudo abrir el diálogo de impresión:', e);
-      mostrarModalError(
-        'No se pudo abrir el diálogo de impresión (¿hay una impresora conectada?). Puedes reintentar cuando quieras.',
-        true
-      );
+      if (typeof mostrarModalError === 'function') {
+        mostrarModalError('No se pudo abrir el diálogo de impresión.', true);
+      }
       terminar();
     }
     const limpiar = () => {
@@ -996,13 +1029,7 @@ function _imprimirUnaCopiaNota(datos, alTerminar) {
     setTimeout(limpiar, 6000);
   };
 
-  // Camino normal: se dispara cuando el iframe termina de cargar el HTML.
   iframe.onload = dispararImpresion;
-
-  // Salvavidas: en algunos navegadores el 'onload' de un iframe cuyo
-  // contenido se escribió con document.write no siempre se dispara de
-  // forma confiable. Si en 800ms no ha pasado nada, se intenta de todos
-  // modos para no dejar al usuario esperando sin diálogo de impresión.
   setTimeout(dispararImpresion, 800);
 
   try {
@@ -1011,21 +1038,15 @@ function _imprimirUnaCopiaNota(datos, alTerminar) {
     doc.write(html);
     doc.close();
   } catch (e) {
-    console.error('No se pudo generar el contenido de la nota de entrega:', e);
+    console.error('No se pudo generar el contenido:', e);
     if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    mostrarModalError('No se pudo generar la nota de entrega. Puedes reintentar cuando quieras.', true);
+    if (typeof mostrarModalError === 'function') {
+      mostrarModalError('No se pudo generar la nota de entrega.', true);
+    }
     terminar();
   }
 }
 
-/**
- * Genera e imprime la nota de entrega: manda UNA sola copia a la
- * impresora y, al terminar, pregunta si hace falta una segunda (por
- * ejemplo para el cliente, si la primera se queda en el negocio). Solo
- * se pregunta una vez — si dice que sí, se imprime la segunda y ahí
- * termina el flujo.
- * @param {Object} datos - datos de la factura aprobada
- */
 function imprimirNotaEntrega(datos) {
   _ultimaNotaImpresa = datos;
   _imprimirUnaCopiaNota(datos, () => {
@@ -1038,12 +1059,6 @@ function imprimirNotaEntrega(datos) {
   });
 }
 
-/**
- * Reimprime la última nota generada. Sigue el mismo flujo que
- * `imprimirNotaEntrega`: imprime una copia y pregunta si hace falta otra.
- * Pensado para cuando el papel se traba, se acaba a mitad de impresión,
- * o la impresora falla y hay que volver a intentarlo.
- */
 function reimprimirNota() {
   if (!_ultimaNotaImpresa) {
     alert('Todavía no se ha generado ninguna nota de entrega para reimprimir.');
