@@ -444,9 +444,9 @@ function verSelectMetodoPago(valor) {
           <i class="fas fa-camera"></i> Adjuntar o Tomar Foto
         </button>
         <div id="verReceiptPreview" class="receipt-preview-box" style="display:none;"></div>
-      </div>;
+      </div>
 
-<!-- Subida del comprobante escaneando un QR con el celular -->
+      <!-- Subida del comprobante escaneando un QR con el celular -->
       <div class="form-field qr-upload-container" style="grid-column: 1 / -1;">
         <span class="capture-label">O escanea este código con tu celular para tomar la foto</span>
         <div class="qr-upload-box">
@@ -648,8 +648,8 @@ function _validarPago() {
       alert('Para el método OTROS, detalla las observaciones.');
       return false;
     }
-    if (!comp?.files?.length) {
-      alert('Para el método OTROS, adjunta el comprobante de pago.');
+    if (!comp?.files?.length && !_qrComprobantePath) {
+      alert('Para el método OTROS, adjunta el comprobante de pago o espera a que se reciba desde el celular vía QR.');
       return false;
     }
   }
@@ -912,6 +912,7 @@ function _construirNotaEntregaHTML(datos) {
         <p><span>Total Bs:</span><span>Bs ${Number(datos.totalBS || 0).toFixed(2)}</span></p>
         <p class="nota-tasa">Tasa: ${Number(datos.tasaCambio || 1).toFixed(2)} Bs/$</p>
       </div>
+      <p class="nota-firma">______________________<br>Firma de conformidad</p>
     </section>`;
 }
 
