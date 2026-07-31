@@ -912,7 +912,6 @@ function _construirNotaEntregaHTML(datos) {
         <p><span>Total Bs:</span><span>Bs ${Number(datos.totalBS || 0).toFixed(2)}</span></p>
         <p class="nota-tasa">Tasa: ${Number(datos.tasaCambio || 1).toFixed(2)} Bs/$</p>
       </div>
-      <p class="nota-firma">______________________<br>Firma de conformidad</p>
     </section>`;
 }
 
