@@ -70,14 +70,29 @@ async function buscarFacturasHoy() {
     statusEl.classList.remove("error");
   }
 
-  const hoy = hoyLocalISO();
-  const start = hoy + "T00:00:00";
-  const d = new Date(hoy + "T00:00:00");
-  d.setDate(d.getDate() + 1);
-  const end = d.toISOString().slice(0, 19);
+const ahora = new Date();
 
-  const query = `${SUPABASE_URL}/rest/v1/facturas?select=*&order=${COL_FECHA}.desc&${COL_FECHA}=gte.${start}&${COL_FECHA}=lt.${end}`;
+const inicio = new Date(
+  ahora.getFullYear(),
+  ahora.getMonth(),
+  ahora.getDate(),
+  0, 0, 0
+).toISOString();
 
+const fin = new Date(
+  ahora.getFullYear(),
+  ahora.getMonth(),
+  ahora.getDate() + 1,
+  0, 0, 0
+).toISOString();
+
+const query =
+  `${SUPABASE_URL}/rest/v1/facturas` +
+  `?select=*` +
+  `&order=${COL_FECHA}.desc` +
+  `&${COL_FECHA}=gte.${inicio}` +
+  `&${COL_FECHA}=lt.${fin}`;
+  
   try {
     const res = await fetch(query, { headers });
     if (!res.ok) throw new Error("Error " + res.status + " al consultar facturas de hoy");
