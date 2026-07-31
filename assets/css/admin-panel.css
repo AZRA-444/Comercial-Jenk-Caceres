@@ -255,8 +255,9 @@ tbody td.text-wrap, thead th.text-wrap {
 }
 .modal-foot .btn { min-height: 38px; padding: 0 18px; }
 
-/* ── Botón cerrar sesión ── */
-.btn-cerrar-sesion {
+/* ── Botón cerrar sesión (index) y botón volver (páginas internas) ── */
+.btn-cerrar-sesion,
+.btn-volver {
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.12);
   color: rgba(255,255,255,.8);
@@ -267,7 +268,8 @@ tbody td.text-wrap, thead th.text-wrap {
   transition: background .15s, color .15s;
   display: flex; align-items: center; gap: 7px;
 }
-.btn-cerrar-sesion:hover { background: rgba(255,255,255,.13); color: #fff; }
+.btn-cerrar-sesion:hover,
+.btn-volver:hover { background: rgba(255,255,255,.13); color: #fff; }
 
 /* ── Botón status ── */
 .status-msg {

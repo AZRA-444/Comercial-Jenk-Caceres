@@ -68,7 +68,12 @@
   }
 
   function mostrarBotonSalir() {
-    // Si la página ya trae su propio botón de "Salir" (ej. administrador.html), no dupliques.
+    // El botón de cerrar sesión solo se muestra en el index (portada).
+    // Las páginas internas tienen su propio botón "Volver" y no necesitan
+    // el botón de salir para evitar confusión al usuario.
+    if (enPaginaInterna) return;
+
+    // Si la página ya trae su propio botón de "Salir", no dupliques.
     if (document.querySelector(".btn-cerrar-sesion")) return;
     const boton = document.createElement("button");
     boton.type = "button";
