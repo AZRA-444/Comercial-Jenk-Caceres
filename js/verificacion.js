@@ -907,7 +907,6 @@ function _construirNotaEntregaHTML(datos) {
       </table>
 
       <p class="nota-tasa">Tasa: ${Number(datos.tasaCambio || 1).toFixed(2)} Bs/$</p>
-      <p class="nota-firma">______________________<br>Firma de conformidad</p>
     </section>`;
 }
 
@@ -941,8 +940,8 @@ function _imprimirUnaCopiaNota(datos, alTerminar) {
           body {
             /* 2. Ancho útil real de impresión (49mm) centrado en el papel de 57mm */
             width: 49mm;
-            margin: 0 auto;
-            padding: 2mm 0;
+            margin: 0;
+            padding: 2mm 0 2mm 1mm;
             
             /* 3. Fuente sin serifas gruesa optimizada para cabezales térmicos de 203 DPI */
             font-family: Arial, Helvetica, sans-serif;
