@@ -609,18 +609,15 @@ function _validarPago() {
   if (metodo === 'PM') {
     const banco = document.getElementById('verBankSelect')?.value;
     const ref   = document.getElementById('verPmRef')?.value.trim();
-    const comp  = document.getElementById('verReceiptCapture');
-
+    
     if (!banco) {
       alert('Para Pago Móvil, selecciona un Banco Destino.');
-      return false;
+      return false
     }
     if (!ref || ref.length < 4) {
       alert('Para Pago Móvil, ingresa el Número de Referencia (mínimo 4 dígitos).');
       return false;
     }
-    if (!comp?.files?.length && !_qrComprobantePath) {
-      alert('Para Pago Móvil, adjunta el comprobante de pago o espera a que se reciba desde el celular vía QR.');
       return false;
     }
   }
