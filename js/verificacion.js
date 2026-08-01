@@ -620,7 +620,6 @@ function _validarPago() {
     }
       return false;
     }
-  }
 
   if (metodo === 'ED') {
     const monto = Number(document.getElementById('verEDMontoRecibido')?.value);
