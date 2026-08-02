@@ -1,11 +1,3 @@
-// ============================================================
-// MÓDULO DE REPORTES — Comercial Jenk Cáceres
-// Cierre de caja, reimpresión de facturas, reporte de ventas por
-// rango de fechas y reporte de comisiones. Todo se consulta
-// directamente contra Supabase (igual que administrador.html e
-// historial.html) y se imprime con el mismo mecanismo de iframe
-// oculto que ya usa js/verificacion.js para las notas de entrega.
-// ============================================================
 const COL_FECHA = "created_at";
 const NOMBRE_EMPRESA = "Comercial Jenk Cáceres";
 
@@ -157,8 +149,9 @@ function imprimirDocumento(html) {
 }
 
 // Plantilla base para reportes en tamaño ticket.
-// Impresora térmica: Roccia RC-5801, rollo de 58mm (~48-50mm imprimibles).
-const ANCHO_TICKET_MM = 58;
+// Impresora térmica: Roccia RC-5801, rollo de 58mm (~49mm imprimibles).
+// Mismo estilo que verificacion.js: Arial, @page sin márgenes, ancho 49mm centrado.
+const ANCHO_TICKET_MM = 57;
 function plantillaTicket(tituloDoc, contenidoHTML) {
   return `<!doctype html>
     <html>
@@ -166,21 +159,62 @@ function plantillaTicket(tituloDoc, contenidoHTML) {
         <meta charset="utf-8"/>
         <title>${escapeHtml(tituloDoc)}</title>
         <style>
-          @page { size: ${ANCHO_TICKET_MM}mm auto; margin: 1.5mm; }
-          * { box-sizing: border-box; }
-          body { width: ${ANCHO_TICKET_MM}mm; font-family: 'Courier New', monospace; font-size: 9.5px; color: #000; margin: 0; }
-          .doc { padding: 2px 1px; }
-          .doc-tag { text-align: center; font-weight: bold; font-size: 10.5px; border: 1px solid #000; padding: 2px 0; margin-bottom: 5px; }
-          .doc-header { text-align: center; margin-bottom: 5px; }
-          .doc-empresa { font-weight: bold; font-size: 11px; margin: 0; }
-          .doc-datos p { margin: 1px 0; word-break: break-word; }
-          .doc-tabla { width: 100%; border-collapse: collapse; margin: 5px 0; }
-          .doc-tabla th, .doc-tabla td { text-align: left; padding: 1px; font-size: 8.5px; overflow-wrap: break-word; }
-          .der { text-align: right; }
-          .doc-totales p { display: flex; justify-content: space-between; margin: 1px 0; }
-          .doc-total-final { font-weight: bold; font-size: 10.5px; border-top: 1px dashed #000; padding-top: 2px; }
+          @page {
+            size: ${ANCHO_TICKET_MM}mm auto;
+            margin: 0mm;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+          }
+          body {
+            width: 49mm;
+            margin: 0;
+            padding: 2mm 0 2mm 1mm;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 9.5px;
+            font-weight: 600;
+            color: #000000;
+            line-height: 1.2;
+          }
+          .doc { width: 100%; }
+          .doc-header { text-align: center; margin-bottom: 4px; }
+          .doc-empresa { font-weight: 900; font-size: 12px; margin: 0 0 2px 0; text-transform: uppercase; }
+          .doc-tag { font-size: 10px; font-weight: bold; margin: 0 0 4px 0; text-align: center; }
+          .doc-datos {
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 3px 0;
+            margin: 4px 0;
+          }
+          .doc-datos p { margin: 1.5px 0; word-break: break-word; font-size: 9px; }
+          .doc-tabla { width: 100%; border-collapse: collapse; margin: 4px 0; table-layout: fixed; }
+          .doc-tabla th, .doc-tabla td { text-align: left; padding: 2px 0; font-size: 9px; vertical-align: top; }
+          .doc-tabla th { font-weight: 900; border-bottom: 1px solid #000; }
+          .doc-tabla th:nth-child(1), .doc-tabla td:nth-child(1) { width: 14%; }
+          .doc-tabla th:nth-child(2), .doc-tabla td:nth-child(2) { width: 56%; }
+          .doc-tabla th:nth-child(3), .doc-tabla td:nth-child(3) { width: 30%; }
+          .doc-tabla-metodos th:nth-child(1), .doc-tabla-metodos td:nth-child(1) { width: 50%; }
+          .doc-tabla-metodos th:nth-child(2), .doc-tabla-metodos td:nth-child(2) { width: 15%; }
+          .doc-tabla-metodos th:nth-child(3), .doc-tabla-metodos td:nth-child(3) { width: 35%; }
+          .der { text-align: right !important; }
+          .doc-totales { width: 100%; border-collapse: collapse; margin-top: 4px; }
+          .doc-totales td { padding: 1.5px 0; font-size: 9px; }
+          .doc-total-final td {
+            font-weight: 900;
+            font-size: 11px;
+            border-top: 1px dashed #000;
+            padding-top: 3px;
+          }
           .doc-sep { border-top: 1px dashed #000; margin: 6px 0; }
-          .doc-firma { margin-top: 12px; font-size: 8.5px; text-align: center; }
+          .doc-firma { margin-top: 15px; font-size: 8.5px; text-align: center; font-weight: normal; }
+          .doc-tasa { font-size: 8px; text-align: right; margin-top: 3px; font-weight: normal; }
         </style>
       </head>
       <body>${contenidoHTML}</body>
@@ -361,26 +395,25 @@ async function imprimirCierreCaja() {
 
   const contenido = `
     <div class="doc">
-      <div class="doc-tag">CIERRE DE CAJA</div>
       <div class="doc-header">
         <p class="doc-empresa">${escapeHtml(NOMBRE_EMPRESA)}</p>
+        <p class="doc-tag">Cierre de Caja</p>
       </div>
       <div class="doc-datos">
         <p><strong>Fecha:</strong> ${escapeHtml(fmtFechaLarga(cc.fecha))}</p>
         <p><strong>Generado por:</strong> ${escapeHtml(usuario)}</p>
         <p><strong>Hora de cierre:</strong> ${new Date().toLocaleTimeString("es-VE")}</p>
       </div>
-      <div class="doc-sep"></div>
-      <table class="doc-tabla">
+      <table class="doc-tabla doc-tabla-metodos">
         <thead><tr><th>Método</th><th class="der">#</th><th class="der">Total $</th></tr></thead>
         <tbody>${filasMetodo || '<tr><td colspan="3">Sin movimientos</td></tr>'}</tbody>
       </table>
-      <div class="doc-totales">
-        <p><span>Facturas emitidas:</span><span>${cc.facturas.length}</span></p>
-        <p><span>Descuentos otorgados:</span><span>-$${cc.totalDescuento.toFixed(2)}</span></p>
-        <p class="doc-total-final"><span>TOTAL USD:</span><span>$${cc.totalUSD.toFixed(2)}</span></p>
-        <p><span>TOTAL Bs:</span><span>Bs ${cc.totalBs.toFixed(2)}</span></p>
-      </div>
+      <table class="doc-totales">
+        <tr><td>Facturas emitidas:</td><td class="der">${cc.facturas.length}</td></tr>
+        <tr><td>Descuentos:</td><td class="der">-$${cc.totalDescuento.toFixed(2)}</td></tr>
+        <tr class="doc-total-final"><td>TOTAL USD:</td><td class="der">$${cc.totalUSD.toFixed(2)}</td></tr>
+        <tr><td>TOTAL Bs:</td><td class="der">Bs ${cc.totalBs.toFixed(2)}</td></tr>
+      </table>
       <div class="doc-firma">
         ______________________<br>Firma del cajero
         <br><br>
@@ -540,9 +573,9 @@ async function reimprimirFactura(idFactura) {
 
   const contenido = `
     <div class="doc">
-      <div class="doc-tag">FACTURA — REIMPRESIÓN</div>
       <div class="doc-header">
         <p class="doc-empresa">${escapeHtml(NOMBRE_EMPRESA)}</p>
+        <p class="doc-tag">Nota de Entrega (Reimpresión)</p>
       </div>
       <div class="doc-datos">
         <p><strong>ID:</strong> ${escapeHtml(factura.id_factura)}</p>
@@ -559,14 +592,14 @@ async function reimprimirFactura(idFactura) {
         <thead><tr><th>Cant</th><th>Producto</th><th class="der">Total $</th></tr></thead>
         <tbody>${filasProductos || '<tr><td colspan="3">Sin productos</td></tr>'}</tbody>
       </table>
-      <div class="doc-totales">
-        <p><span>Subtotal:</span><span>$${(Number(factura.subtotal_usd) || 0).toFixed(2)}</span></p>
-        <p><span>Descuento:</span><span>-$${(Number(factura.descuento_usd) || 0).toFixed(2)}</span></p>
-        <p class="doc-total-final"><span>TOTAL:</span><span>$${(Number(factura.total_usd) || 0).toFixed(2)}</span></p>
-        <p><span>Total Bs:</span><span>Bs ${(Number(factura.total_bs) || 0).toFixed(2)}</span></p>
-        <p style="font-size:9px;text-align:right;">Tasa: ${(Number(factura.tasa_cambio) || 1).toFixed(2)} Bs/$</p>
-      </div>
-      <div class="doc-firma">Documento reimpreso el ${new Date().toLocaleString("es-VE")}</div>
+      <table class="doc-totales">
+        <tr><td>Subtotal:</td><td class="der">$${(Number(factura.subtotal_usd) || 0).toFixed(2)}</td></tr>
+        <tr><td>Descuento:</td><td class="der">-$${(Number(factura.descuento_usd) || 0).toFixed(2)}</td></tr>
+        <tr class="doc-total-final"><td>TOTAL:</td><td class="der">$${(Number(factura.total_usd) || 0).toFixed(2)}</td></tr>
+        <tr><td>Total Bs:</td><td class="der">Bs ${(Number(factura.total_bs) || 0).toFixed(2)}</td></tr>
+      </table>
+      <p class="doc-tasa">Tasa: ${(Number(factura.tasa_cambio) || 1).toFixed(2)} Bs/$</p>
+      <div class="doc-firma">Reimpreso el ${new Date().toLocaleString("es-VE")}</div>
     </div>`;
 
   imprimirDocumento(plantillaTicket("Factura " + factura.id_factura, contenido));
@@ -639,9 +672,6 @@ document.getElementById("btn-rc-imprimir")?.addEventListener("click", imprimirRe
   const rcMes = document.getElementById("rc-mes");
   if (rcMes) rcMes.value = mesActual;
 
-  // Solo se carga de inmediato la pestaña activa (Cierre de caja); las
-  // demás se cargan la primera vez que el usuario hace click en su tab,
-  // para no lanzar 4 consultas pesadas contra Supabase al entrar.
   tabsCargados.caja = true;
   await generarCierreCaja();
 })();
