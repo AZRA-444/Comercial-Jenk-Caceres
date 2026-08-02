@@ -1,39 +1,17 @@
 from http.server import BaseHTTPRequestHandler
-import base64
 import json
 import os
 import re
-import time
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
 # Configuración básica.
-# NOTA: cuando se aprueba una factura, este mismo endpoint recibe también el
-# comprobante de pago en base64 (hasta 5MB en binario, ~33% más en base64),
-# así que el límite ya no puede quedarse en 512 KB como en el resto de
-# ediciones simples de campos.
-MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB (ediciones normales de campos)
-
-BUCKET_COMPROBANTES = "comprobantes"
-EXTENSIONES_PERMITIDAS = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/heic": "heic",
-}
-MAX_BYTES_COMPROBANTE = 5 * 1024 * 1024  # 5MB
-
-# Límite del cuerpo completo de la solicitud cuando se aprueba una factura
-# (JSON + comprobante en base64 + productos editados).
-MAX_BYTES_SOLICITUD_APROBACION = int(MAX_BYTES_COMPROBANTE * 1.5) + (256 * 1024)
+MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB (ediciones normales de campos y aprobación)
 
 # Métodos de pago que el sistema realmente sabe procesar; igual que en
 # guardar-factura.py, cualquier otro valor se rechaza en vez de guardarse
 # "tal cual" en la tabla definitiva.
 METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
-
-# Métodos de pago que exigen comprobante adjunto para poder aprobarse.
-METODOS_QUE_REQUIEREN_COMPROBANTE = {"PM", "OTROS"}
 
 MAX_PRODUCTOS_POR_FACTURA = 300
 LONGITUD_MAXIMA_NOMBRE_PRODUCTO = 120
@@ -44,10 +22,6 @@ LONGITUDES_MAXIMAS = {
 }
 
 ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
-
-# Ruta esperada para un comprobante subido directamente desde el celular vía
-# QR (ver subir-comprobante.js): siempre dentro de la carpeta "qr/" del bucket.
-COMPROBANTE_REMOTO_REGEX = re.compile(r"^qr/[A-Za-z0-9\-]{1,120}\.(jpg|jpeg|png|webp|heic)$")
 
 URL_SUPABASE = os.environ.get("SUPABASE_URL", "")
 KEY_SUPABASE = os.environ.get("SUPABASE_SECRET_KEY", "")
@@ -106,81 +80,6 @@ def _validar_productos_editados(productos):
     return None
 
 
-def _subir_comprobante(comprobante_base64, comprobante_tipo, id_factura):
-    """Decodifica el base64 recibido y lo sube a Supabase Storage.
-    Devuelve (path, None) si todo sale bien, o (None, mensaje_error) si falla.
-    (Misma lógica que guardar-factura.py, para que un comprobante subido al
-    aprobar una factura se comporte igual que uno subido al crearla.)"""
-
-    extension = EXTENSIONES_PERMITIDAS.get(comprobante_tipo)
-    if not extension:
-        return None, f"Tipo de imagen no soportado: {comprobante_tipo}"
-
-    try:
-        binario = base64.b64decode(comprobante_base64, validate=True)
-    except Exception:
-        return None, "El comprobante no es un base64 válido"
-
-    if len(binario) > MAX_BYTES_COMPROBANTE:
-        return None, "El comprobante supera el tamaño máximo permitido (5MB)"
-
-    path = f"{id_factura}-{int(time.time())}.{extension}"
-    url_subida = f"{URL_SUPABASE}/storage/v1/object/{BUCKET_COMPROBANTES}/{path}"
-
-    headers = {
-        "apikey": KEY_SUPABASE,
-        "Authorization": f"Bearer {KEY_SUPABASE}",
-        "Content-Type": comprobante_tipo,
-        "x-upsert": "false",
-    }
-
-    try:
-        res = session.post(url_subida, headers=headers, data=binario, timeout=15)
-    except requests.exceptions.RequestException as e:
-        return None, f"No se pudo conectar con Supabase Storage: {e}"
-
-    if res.status_code not in (200, 201):
-        return None, f"No se pudo subir el comprobante: {res.text}"
-
-    return path, None
-
-
-def _verificar_comprobante_remoto(path, id_factura):
-    """Verifica que un comprobante subido DIRECTAMENTE desde el celular (vía QR,
-    ver subir-comprobante.js) realmente exista en el bucket antes de confiar en
-    su ruta. El celular sube el archivo con la anon key (sin pasar por este
-    backend), así que aquí solo se confirma su existencia y tamaño.
-    Devuelve (path, None) si es válido, o (None, mensaje_error) si no."""
-
-    path = str(path)
-    if not COMPROBANTE_REMOTO_REGEX.match(path):
-        return None, "Ruta de comprobante remoto inválida"
-
-    # La ruta debe corresponder a la factura que se está aprobando, para que
-    # un verificador no pueda "reutilizar" por error el comprobante de otra.
-    nombre_archivo = path.split("/", 1)[-1]
-    if not nombre_archivo.startswith(f"{id_factura}-"):
-        return None, "El comprobante subido no corresponde a esta factura"
-
-    url_publica = f"{URL_SUPABASE}/storage/v1/object/public/{BUCKET_COMPROBANTES}/{path}"
-    try:
-        res = session.head(url_publica, timeout=10)
-    except requests.exceptions.RequestException as e:
-        return None, f"No se pudo verificar el comprobante subido desde el celular: {e}"
-
-    if res.status_code != 200:
-        return None, "Aún no se encuentra el comprobante subido desde el celular. Intenta de nuevo en unos segundos."
-
-    content_length = res.headers.get("Content-Length")
-    try:
-        if content_length and int(content_length) > MAX_BYTES_COMPROBANTE:
-            return None, "El comprobante subido desde el celular supera el tamaño máximo permitido (5MB)"
-    except ValueError:
-        pass
-
-    return path, None
-
-
 class handler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
@@ -233,10 +132,7 @@ class handler(BaseHTTPRequestHandler):
     def _editar_temporal(self):
         try:
             content_length = int(self.headers.get('Content-Length', 0))
-            # No sabemos todavía si esta petición es una aprobación (que puede
-            # incluir el comprobante en base64) o una simple edición de campos,
-            # así que se valida contra el límite más amplio de los dos.
-            if content_length <= 0 or content_length > MAX_BYTES_SOLICITUD_APROBACION:
+            if content_length <= 0 or content_length > MAX_BYTES_SOLICITUD:
                 self._responder(400, {"status": "error", "message": "Cuerpo de solicitud inválido o muy grande"})
                 return
 
@@ -255,9 +151,9 @@ class handler(BaseHTTPRequestHandler):
 
         # CASO ESPECIAL: Si se está aprobando, migramos a las tablas definitivas
         # aplicando lo que el verificador haya editado en el formulario de
-        # aprobación (productos, totales recalculados, método de pago y
-        # comprobante). Estos datos NO viven en facturas_temporales: llegan
-        # únicamente en el body de esta misma petición (ver verificacion.js).
+        # aprobación (productos, totales recalculados y método de pago).
+        # Estos datos NO viven en facturas_temporales: llegan únicamente en
+        # el body de esta misma petición (ver verificacion.js).
         if nuevo_estado == "aprobado":
             headers_supabase = {
                 "apikey": KEY_SUPABASE,
@@ -313,32 +209,7 @@ class handler(BaseHTTPRequestHandler):
                     self._responder(400, {"status": "error", "message": "Los totales recalculados deben ser numéricos"})
                     return
 
-                # 5. Subir el comprobante de pago si el verificador adjuntó uno,
-                #    o verificar el que ya se subió directo desde el celular vía QR.
-                comprobante_path = None
-                comprobante_base64 = body_data.get("comprobante_base64")
-                comprobante_tipo = body_data.get("comprobante_tipo")
-                comprobante_path_remoto = body_data.get("comprobante_path_remoto")
-
-                if comprobante_base64 and comprobante_tipo:
-                    comprobante_path, error_comprobante = _subir_comprobante(
-                        comprobante_base64, comprobante_tipo, id_factura
-                    )
-                    if error_comprobante:
-                        self._responder(400, {"status": "error", "message": error_comprobante})
-                        return
-                elif comprobante_path_remoto:
-                    comprobante_path, error_comprobante = _verificar_comprobante_remoto(
-                        comprobante_path_remoto, id_factura
-                    )
-                    if error_comprobante:
-                        self._responder(400, {"status": "error", "message": error_comprobante})
-                        return
-                elif metodo_pago in METODOS_QUE_REQUIEREN_COMPROBANTE:
-                    self._responder(400, {"status": "error", "message": f"El método de pago {metodo_pago} requiere un comprobante de pago"})
-                    return
-
-                # 6. Obtener la tasa de cambio:
+                # 5. Obtener la tasa de cambio:
                 #    Acepta si el verificador la actualizó en el body, o la toma de la temporal.
                 #    Si no existe en ninguna, la deriva de total_bs / total_usd.
                 tasa_cambio_raw = body_data.get("tasa_cambio") or factura_temp.get("tasa_cambio")
@@ -353,7 +224,7 @@ class handler(BaseHTTPRequestHandler):
                 subtotal_bs = round(subtotal_usd * tasa_cambio, 2)
                 descuento_bs = round(descuento_usd * tasa_cambio, 2)
 
-                # 7. Armar la factura definitiva combinando lo fijo con lo editado.
+                # 6. Armar la factura definitiva combinando lo fijo con lo editado.
                 p_factura = {
                     "id_factura": id_factura,
                     "nombre": factura_temp.get("nombre"),
@@ -372,7 +243,6 @@ class handler(BaseHTTPRequestHandler):
                     "referencia": body_data.get("referencia", "N/A"),
                     "banco": body_data.get("banco", "N/A"),
                     "observaciones": body_data.get("observaciones", ""),
-                    "comprobante_path": comprobante_path,
                 }
 
                 p_detalles = [
@@ -385,7 +255,7 @@ class handler(BaseHTTPRequestHandler):
                     for p in productos
                 ]
 
-                # 8. Insertar cabecera + detalles atómicamente vía la misma RPC
+                # 7. Insertar cabecera + detalles atómicamente vía la misma RPC
                 #    que usa guardar-factura.py, para no dejar nunca una factura
                 #    a medio migrar si algo falla a mitad de camino.
                 url_rpc = f"{URL_SUPABASE}/rest/v1/rpc/guardar_factura_completa"
@@ -400,7 +270,7 @@ class handler(BaseHTTPRequestHandler):
                     self._responder(502, {"status": "error", "message": f"No se pudo migrar la factura a las tablas definitivas: {res_rpc.text}"})
                     return
 
-                # 9. Solo si la migración fue exitosa se elimina el registro temporal
+                # 8. Solo si la migración fue exitosa se elimina el registro temporal
                 url_del_detalles = f"{URL_SUPABASE}/rest/v1/detalles_factura_temporal?id_factura=eq.{id_factura}"
                 session.delete(url_del_detalles, headers=headers_supabase, timeout=10)
 

@@ -1,23 +1,11 @@
 from http.server import BaseHTTPRequestHandler
-import base64
 import json
 import os
 import re
-import time
-from urllib.parse import quote
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
-BUCKET_COMPROBANTES = "comprobantes"
-EXTENSIONES_PERMITIDAS = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/heic": "heic",
-}
-MAX_BYTES_COMPROBANTE = 5 * 1024 * 1024  # 5MB
-
-MAX_BYTES_SOLICITUD = int(MAX_BYTES_COMPROBANTE * 1.5) + (256 * 1024)
+MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB
 MAX_PRODUCTOS_POR_FACTURA = 300
 METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
 
@@ -47,41 +35,6 @@ retries = Retry(
     allowed_methods=["POST"],
 )
 session.mount("https://", HTTPAdapter(max_retries=retries))
-
-
-def subir_comprobante(comprobante_base64, comprobante_tipo, id_factura):
-    """Decodifica el base64 recibido y lo sube a Supabase Storage."""
-    extension = EXTENSIONES_PERMITIDAS.get(comprobante_tipo)
-    if not extension:
-        return None, f"Tipo de imagen no soportado: {comprobante_tipo}"
-
-    try:
-        binario = base64.b64decode(comprobante_base64, validate=True)
-    except Exception:
-        return None, "El comprobante no es un base64 válido"
-
-    if len(binario) > MAX_BYTES_COMPROBANTE:
-        return None, "El comprobante supera el tamaño máximo permitido (5MB)"
-
-    path = f"{id_factura}-{int(time.time())}.{extension}"
-    url_subida = f"{URL_SUPABASE}/storage/v1/object/{BUCKET_COMPROBANTES}/{path}"
-
-    headers = {
-        "apikey": KEY_SUPABASE,
-        "Authorization": f"Bearer {KEY_SUPABASE}",
-        "Content-Type": comprobante_tipo,
-        "x-upsert": "false",
-    }
-
-    try:
-        res = session.post(url_subida, headers=headers, data=binario, timeout=15)
-    except requests.exceptions.RequestException as e:
-        return None, f"No se pudo conectar con Supabase Storage: {e}"
-
-    if res.status_code not in (200, 201):
-        return None, f"No se pudo subir el comprobante: {res.text}"
-
-    return path, None
 
 
 def validar_factura(data):
@@ -223,24 +176,8 @@ class handler(BaseHTTPRequestHandler):
             self._responder(400, {"status": "error", "message": error_validacion})
             return
 
-        # === 2. Subida del comprobante ===
-        comprobante_path = None
-        comprobante_base64 = factura_data.get("comprobante_base64")
-        comprobante_tipo = factura_data.get("comprobante_tipo")
-
-        if comprobante_base64 and comprobante_tipo:
-            comprobante_path, error_comprobante = subir_comprobante(
-                comprobante_base64,
-                comprobante_tipo,
-                factura_data.get("id_factura"),
-            )
-            if error_comprobante:
-                self._responder(400, {"status": "error", "message": error_comprobante})
-                return
-
-        # === 3. Estructura de cabecera con tasa_cambio incluida ===
+        # === 2. Estructura de cabecera con tasa_cambio incluida ===
         p_factura = {
-            "comprobante_path": comprobante_path,
             "id_factura": factura_data.get("id_factura"),
             "nombre": factura_data.get("nombre"),
             "apellido": factura_data.get("apellido", ""),
@@ -297,7 +234,7 @@ class handler(BaseHTTPRequestHandler):
             })
             return
 
-        # === 4. Respuesta exitosa al cliente ===
+        # === 3. Respuesta exitosa al cliente ===
         self._responder(200, {
             "status": "success",
             "message": "Factura guardada exitosamente.",
