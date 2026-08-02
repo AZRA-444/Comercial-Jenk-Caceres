@@ -147,7 +147,6 @@ function seleccionarFactura(index) {
 
   // Renderizar tabla y totales
   verActualizarTabla();
-  _actualizarEstadoBotonAprobar();
 }
 
 // ---------------------------------------------------------------------------
