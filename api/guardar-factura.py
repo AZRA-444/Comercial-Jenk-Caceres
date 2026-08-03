@@ -6,7 +6,7 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 
 MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB
-MAX_PRODUCTOS_POR_FACTURA = 300
+MAX_PRODUCTOS_POR_FACTURA = 150
 METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
 
 ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")

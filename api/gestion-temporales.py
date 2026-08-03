@@ -13,7 +13,7 @@ MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB (ediciones normales de campos y aprob
 # "tal cual" en la tabla definitiva.
 METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
 
-MAX_PRODUCTOS_POR_FACTURA = 300
+MAX_PRODUCTOS_POR_FACTURA = 150
 LONGITUD_MAXIMA_NOMBRE_PRODUCTO = 120
 LONGITUDES_MAXIMAS = {
     "referencia": 40,
