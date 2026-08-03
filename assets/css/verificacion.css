@@ -64,6 +64,80 @@ main {
   align-items: center; justify-content: center;
 }
 
+/* ── Contenedor y Chips ── */
+label:has(.mix-method-chk) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s var(--ease);
+}
+
+/* Hover en la opción */
+label:has(.mix-method-chk):hover {
+  border-color: var(--border-2);
+  background-color: var(--surface-1);
+}
+
+/* ── Checkbox Personalizado ── */
+.mix-method-chk {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1.5px solid var(--border-2);
+  border-radius: 4px;
+  background-color: var(--surface);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  margin: 0;
+  transition: all 0.2s var(--ease);
+}
+
+/* Icono de Checkmark (SVG dibujado en CSS) */
+.mix-method-chk::before {
+  content: "";
+  width: 0.65rem;
+  height: 0.65rem;
+  transform: scale(0);
+  transition: transform 0.15s var(--ease);
+  background-color: var(--surface);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+/* ── Estado Marcado (Checked) ── */
+.mix-method-chk:checked {
+  background-color: var(--rose);
+  border-color: var(--rose);
+}
+
+.mix-method-chk:checked::before {
+  transform: scale(1);
+}
+
+/* Resaltado del Label completo al estar activo */
+label:has(.mix-method-chk:checked) {
+  background-color: var(--rose-faint);
+  border-color: var(--rose);
+  color: var(--rose-deep);
+  font-weight: 600;
+}
+
+/* Accesibilidad Focus */
+.mix-method-chk:focus-visible {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
+}
+
 /* ── Sidebar: lista de pendientes ── */
 .ver-sidebar {
   grid-area: sidebar;
