@@ -219,9 +219,8 @@ function recalcularTotales() {
 
   // 3. Escala de descuento según monto aplicable (USD)
   let porcentaje = 0;
-  if      (subDescUSD > 150) porcentaje = 20;
-  else if (subDescUSD >  50) porcentaje = 15;
-  else if (subDescUSD >  10) porcentaje = 10;
+  if      (subDescUSD > 100) porcentaje = 30;
+  else if (subDescUSD >  10) porcentaje = 20;
 
   // 4. Cálculos finales
   const descuentoUSD = subDescUSD * (porcentaje / 100);
