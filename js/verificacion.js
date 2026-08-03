@@ -1129,6 +1129,12 @@ function filtrarFacturas() {
 // ---------------------------------------------------------------------------
 // Helpers UI
 // ---------------------------------------------------------------------------
+function continuarDespuesDeAprobar() {
+  cerrarModal();
+  limpiarDetalle();
+  window.location.reload();
+}
+
 function limpiarDetalle() {
   _facturaActual = null;
   document.getElementById('detailEmpty').classList.remove('hidden');
