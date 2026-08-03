@@ -411,8 +411,7 @@ function _recalcularTotales() {
   const subTotalUSD = subDescUSD + subExcUSD;
 
   let porcentaje = 0;
-  if      (subDescUSD > 150) porcentaje = 20;
-  else if (subDescUSD >  50) porcentaje = 15;
+  if      (subDescUSD > 100) porcentaje = 30;
   else if (subDescUSD >  10) porcentaje = 10;
 
   const descuentoUSD = subDescUSD * (porcentaje / 100);
