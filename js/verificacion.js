@@ -329,6 +329,7 @@ function verSelectMetodoPago(valor) {
           <option value="Venezuela">Banco de Venezuela</option>
           <option value="Provincial">Provincial</option>
           <option value="Banplus">Banplus</option>
+          <option value="BNC">BNC</option>
         </select>
       </label>
       <label class="form-field">Número de Referencia
