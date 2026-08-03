@@ -367,8 +367,8 @@ function actualizarTabla() {
 
   // El porcentaje de descuento se calcula solo sobre lo que sí aplica a descuento
   let porcentajeDescuento = 0;
-  if (subTotalDescontableUSD => 100) porcentajeDescuento = 30;
-  else if (subTotalDescontableUSD => 10) porcentajeDescuento = 20;
+  if (subTotalDescontableUSD > 100) porcentajeDescuento = 30;
+  else if (subTotalDescontableUSD > 10) porcentajeDescuento = 20;
 
   state.descUSD = subTotalDescontableUSD * (porcentajeDescuento / 100);
   state.descBS = subTotalDescontableBS * (porcentajeDescuento / 100);
