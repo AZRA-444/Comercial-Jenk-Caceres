@@ -329,7 +329,6 @@ function verSelectMetodoPago(valor) {
           <option value="Venezuela">Banco de Venezuela</option>
           <option value="Provincial">Provincial</option>
           <option value="Banplus">Banplus</option>
-          <option value="BNC">BNC</option>
         </select>
       </label>
       <label class="form-field">Número de Referencia
@@ -389,9 +388,9 @@ function verSelectMetodoPago(valor) {
       }
     }, 0);
 
-  } else if (valor === 'COMB') {
+} else if (valor === 'COMB') {
     
-    // Calculamos la tasa implícita para poder sumar $ y Bs en tiempo real
+    // Calculamos la tasa implícita para poder convertir $ y Bs en tiempo real
     const tasa = totalUSD > 0 ? (totalBS / totalUSD) : 1;
 
     container.innerHTML = `
@@ -413,11 +412,14 @@ function verSelectMetodoPago(valor) {
       <div id="verCombSummary" style="grid-column: 1 / -1; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); padding: 12px; border-radius: 8px; margin-top: 10px; display: none;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
           <span style="color: var(--text-secondary); font-size: 0.9rem;">Total ingresado:</span>
-          <strong>$<span id="verCombTotal">0.00</span></strong>
+          <strong>$<span id="verCombTotal">0.00</span> <span style="font-size:0.85rem; font-weight:normal; color:var(--text-secondary);">/ Bs <span id="verCombTotalBS">0.00</span></span></strong>
         </div>
         <div style="display: flex; justify-content: space-between;">
           <span style="color: var(--text-secondary); font-size: 0.9rem;">Resta por pagar:</span>
-          <strong style="color: #ef4444;">$<span id="verCombRestante">${totalUSD.toFixed(2)}</span></strong>
+          <strong style="color: #ef4444;" id="verCombRestanteContainer">
+            $<span id="verCombRestante">${totalUSD.toFixed(2)}</span> 
+            <span style="font-size:0.85rem; font-weight:normal;">/ Bs <span id="verCombRestanteBS">${totalBS.toFixed(2)}</span></span>
+          </strong>
         </div>
       </div>`;
 
@@ -425,10 +427,14 @@ function verSelectMetodoPago(valor) {
       const checkboxes = container.querySelectorAll('.mix-method-chk');
       const detailsContainer = document.getElementById('verCombDetails');
       const summaryContainer = document.getElementById('verCombSummary');
+      
       const spanTotal = document.getElementById('verCombTotal');
+      const spanTotalBS = document.getElementById('verCombTotalBS');
       const spanRestante = document.getElementById('verCombRestante');
+      const spanRestanteBS = document.getElementById('verCombRestanteBS');
+      const restanteContainer = document.getElementById('verCombRestanteContainer');
 
-      // Función que suma los montos para mostrar el restante
+      // Función que suma los montos para mostrar el restante en $ y Bs
       const recalcularTotales = () => {
         let sumaUSD = 0;
 
@@ -443,12 +449,22 @@ function verSelectMetodoPago(valor) {
           sumaUSD += (montoBs / tasa);
         });
 
-        const restante = verState.totalUSD - sumaUSD;
+        const restanteUSD = verState.totalUSD - sumaUSD;
+        const sumaBS = sumaUSD * tasa;
+        const restanteBS = restanteUSD * tasa;
 
+        // Actualizar totales ingresados
         spanTotal.textContent = sumaUSD.toFixed(2);
-        spanRestante.textContent = restante > 0 ? restante.toFixed(2) : '0.00';
+        spanTotalBS.textContent = sumaBS.toFixed(2);
+
+        // Actualizar restantes por pagar
+        spanRestante.textContent = restanteUSD > 0 ? restanteUSD.toFixed(2) : '0.00';
+        spanRestanteBS.textContent = restanteBS > 0 ? restanteBS.toFixed(2) : '0.00';
+
         // Cambiar color a verde si ya se cubrió el monto total
-        spanRestante.parentElement.style.color = restante <= 0.01 ? '#10b981' : '#ef4444'; 
+        if (restanteContainer) {
+          restanteContainer.style.color = restanteUSD <= 0.01 ? '#10b981' : '#ef4444';
+        }
       };
 
       // Función que renderiza los campos según los checkboxes marcados
@@ -499,9 +515,6 @@ function verSelectMetodoPago(valor) {
               html += `
                 <label class="form-field">Monto (Bs)
                   <input type="number" step="0.01" class="comb-monto input-bs" name="comb_pvd_monto" placeholder="Monto Bs" />
-                </label>
-                <label class="form-field">Referencia
-                  <input type="number" name="comb_pvd_ref" placeholder="Nro Referencia" />
                 </label>`;
             }
             html += `</div></div>`;
@@ -810,23 +823,36 @@ async function aprobarFacturaActual() {
       };
 
       try {
+
         imprimirNotaEntrega(datosNota);
+
       } catch (errImpresion) {
+
         console.warn('No se pudo generar la nota de entrega para imprimir:', errImpresion);
         mostrarModalError(
           'La factura se guardó correctamente, pero no se pudo abrir la impresión automática. Usa "Reintentar impresión".',
           true
+
         );
+
       }
 
     } else {
+
       mostrarModalError(json.message || 'No se pudo aprobar la factura.');
+
       btn.disabled = false;
+
     }
+
   } catch (err) {
+
     mostrarModalError('Error de conexión: ' + err.message);
+
     btn.disabled = false;
+
   }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -1263,3 +1289,4 @@ window.cerrarModalError      = cerrarModalError;
 window.imprimirNotaEntrega   = imprimirNotaEntrega;
 window.reimprimirNota        = reimprimirNota;
 window.continuarDespuesDeAprobar = continuarDespuesDeAprobar;
+
