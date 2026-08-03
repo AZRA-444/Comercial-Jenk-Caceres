@@ -389,6 +389,143 @@ function verSelectMetodoPago(valor) {
       }
     }, 0);
 
+  } else if (valor === 'COMB') {
+    
+    // Calculamos la tasa implícita para poder sumar $ y Bs en tiempo real
+    const tasa = totalUSD > 0 ? (totalBS / totalUSD) : 1;
+
+    container.innerHTML = `
+      ${montoHeader}
+      <div style="grid-column: 1 / -1; margin-bottom: 10px;">
+        <label class="form-field" style="margin-bottom: 8px;">Métodos a combinar:</label>
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; padding: 5px 0;">
+          <label><input type="checkbox" class="mix-method-chk" value="PM"> Pago Móvil</label>
+          <label><input type="checkbox" class="mix-method-chk" value="ED"> Efectivo ($)</label>
+          <label><input type="checkbox" class="mix-method-chk" value="EBS"> Efectivo (Bs)</label>
+          <label><input type="checkbox" class="mix-method-chk" value="PVD"> Punto de Venta</label>
+        </div>
+      </div>
+      
+      <!-- Contenedor donde aparecerán los inputs dinámicamente -->
+      <div id="verCombDetails" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px;"></div>
+      
+      <!-- Resumen en tiempo real -->
+      <div id="verCombSummary" style="grid-column: 1 / -1; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); padding: 12px; border-radius: 8px; margin-top: 10px; display: none;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="color: var(--text-secondary); font-size: 0.9rem;">Total ingresado:</span>
+          <strong>$<span id="verCombTotal">0.00</span></strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: var(--text-secondary); font-size: 0.9rem;">Resta por pagar:</span>
+          <strong style="color: #ef4444;">$<span id="verCombRestante">${totalUSD.toFixed(2)}</span></strong>
+        </div>
+      </div>`;
+
+    setTimeout(() => {
+      const checkboxes = container.querySelectorAll('.mix-method-chk');
+      const detailsContainer = document.getElementById('verCombDetails');
+      const summaryContainer = document.getElementById('verCombSummary');
+      const spanTotal = document.getElementById('verCombTotal');
+      const spanRestante = document.getElementById('verCombRestante');
+
+      // Función que suma los montos para mostrar el restante
+      const recalcularTotales = () => {
+        let sumaUSD = 0;
+
+        // Sumar montos ingresados en dólares (clase .input-usd)
+        document.querySelectorAll('.input-usd').forEach(input => {
+          sumaUSD += Number(input.value) || 0;
+        });
+
+        // Sumar montos ingresados en bolívares (clase .input-bs) y convertirlos a dólares
+        document.querySelectorAll('.input-bs').forEach(input => {
+          const montoBs = Number(input.value) || 0;
+          sumaUSD += (montoBs / tasa);
+        });
+
+        const restante = verState.totalUSD - sumaUSD;
+
+        spanTotal.textContent = sumaUSD.toFixed(2);
+        spanRestante.textContent = restante > 0 ? restante.toFixed(2) : '0.00';
+        // Cambiar color a verde si ya se cubrió el monto total
+        spanRestante.parentElement.style.color = restante <= 0.01 ? '#10b981' : '#ef4444'; 
+      };
+
+      // Función que renderiza los campos según los checkboxes marcados
+      const renderCombFields = () => {
+        let html = '';
+        let hasSelection = false;
+
+        checkboxes.forEach(chk => {
+          if (chk.checked) {
+            hasSelection = true;
+            const method = chk.value;
+            const title = chk.parentElement.textContent.trim();
+
+            html += `
+              <div style="border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 12px; background: #fff;">
+                <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: var(--accent);">${title}</h4>
+                <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">`;
+
+            if (method === 'PM') {
+              html += `
+                <label class="form-field">Monto (Bs)
+                  <input type="number" step="0.01" class="comb-monto input-bs" name="comb_pm_monto" placeholder="Monto Bs" />
+                </label>
+                <label class="form-field">Banco
+                  <select name="comb_pm_banco">
+                    <option value="" disabled selected>Seleccione</option>
+                    <option value="Banesco">Banesco</option>
+                    <option value="Venezuela">Venezuela</option>
+                    <option value="Provincial">Provincial</option>
+                    <option value="Banplus">Banplus</option>
+                    <option value="BNC">BNC</option>
+                  </select>
+                </label>
+                <label class="form-field">Referencia
+                  <input type="number" name="comb_pm_ref" placeholder="Últimos 4" />
+                </label>`;
+            } else if (method === 'ED') {
+              html += `
+                <label class="form-field">Monto ($)
+                  <input type="number" step="0.01" class="comb-monto input-usd" name="comb_ed_monto" placeholder="Monto USD" />
+                </label>`;
+            } else if (method === 'EBS') {
+              html += `
+                <label class="form-field">Monto (Bs)
+                  <input type="number" step="0.01" class="comb-monto input-bs" name="comb_ebs_monto" placeholder="Monto Bs" />
+                </label>`;
+            } else if (method === 'PVD') {
+              html += `
+                <label class="form-field">Monto (Bs)
+                  <input type="number" step="0.01" class="comb-monto input-bs" name="comb_pvd_monto" placeholder="Monto Bs" />
+                </label>
+                <label class="form-field">Referencia
+                  <input type="number" name="comb_pvd_ref" placeholder="Nro Referencia" />
+                </label>`;
+            }
+            html += `</div></div>`;
+          }
+        });
+
+        detailsContainer.innerHTML = html;
+        summaryContainer.style.display = hasSelection ? 'block' : 'none';
+
+        // Reasignamos el evento para recalcular automáticamente cuando se escriba un monto
+        detailsContainer.querySelectorAll('.comb-monto').forEach(input => {
+          input.addEventListener('input', recalcularTotales);
+        });
+        
+        recalcularTotales();
+      };
+
+      // Escuchamos el cambio en los checkboxes para dibujar la interfaz
+      checkboxes.forEach(chk => {
+        chk.addEventListener('change', renderCombFields);
+      });
+
+    }, 0);
+
   } else if (valor === 'OTROS') {
     container.innerHTML = `
       ${montoHeader}
@@ -404,7 +541,6 @@ function _actualizarMontoPago(metodo, totalUSD, totalBS) {
   if (!el) return;
   el.innerHTML = `$${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>`;
 }
-
 
 // ---------------------------------------------------------------------------
 // 7. Validar formulario de pago antes de aprobar
@@ -423,7 +559,7 @@ function _validarPago() {
     
     if (!banco) {
       alert('Para Pago Móvil, selecciona un Banco Destino.');
-      return false
+      return false;
     }
     if (!ref || ref.length < 4) {
       alert('Para Pago Móvil, ingresa el Número de Referencia (mínimo 4 dígitos).');
@@ -447,8 +583,84 @@ function _validarPago() {
     }
   }
 
+  if (metodo === 'COMB') {
+    const checkboxes = document.querySelectorAll('.mix-method-chk:checked');
+    
+    if (checkboxes.length === 0) {
+      alert('Para Pago Combinado, selecciona al menos un método de pago.');
+      return false;
+    }
+
+    const tasa = verState.totalUSD > 0 ? (verState.totalBS / verState.totalUSD) : 1;
+    let sumaUSD = 0;
+
+    for (const chk of checkboxes) {
+      const val = chk.value;
+
+      if (val === 'PM') {
+        const monto = Number(document.querySelector('input[name="comb_pm_monto"]')?.value) || 0;
+        const banco = document.querySelector('select[name="comb_pm_banco"]')?.value;
+        const ref   = document.querySelector('input[name="comb_pm_ref"]')?.value.trim();
+
+        if (monto <= 0) {
+          alert('Ingresa un monto válido para Pago Móvil.');
+          return false;
+        }
+        if (!banco) {
+          alert('Selecciona un Banco Destino para Pago Móvil.');
+          return false;
+        }
+        if (!ref || ref.length < 4) {
+          alert('Ingresa el Número de Referencia para Pago Móvil (mínimo 4 dígitos).');
+          return false;
+        }
+        sumaUSD += (monto / tasa);
+      }
+
+      if (val === 'ED') {
+        const monto = Number(document.querySelector('input[name="comb_ed_monto"]')?.value) || 0;
+        if (monto <= 0) {
+          alert('Ingresa un monto válido para Efectivo ($).');
+          return false;
+        }
+        sumaUSD += monto;
+      }
+
+      if (val === 'EBS') {
+        const monto = Number(document.querySelector('input[name="comb_ebs_monto"]')?.value) || 0;
+        if (monto <= 0) {
+          alert('Ingresa un monto válido para Efectivo (Bs).');
+          return false;
+        }
+        sumaUSD += (monto / tasa);
+      }
+
+      if (val === 'PVD') {
+        const monto = Number(document.querySelector('input[name="comb_pvd_monto"]')?.value) || 0;
+        const ref   = document.querySelector('input[name="comb_pvd_ref"]')?.value.trim();
+
+        if (monto <= 0) {
+          alert('Ingresa un monto válido para Punto de Venta.');
+          return false;
+        }
+        if (!ref) {
+          alert('Ingresa el Número de Referencia para el Punto de Venta.');
+          return false;
+        }
+        sumaUSD += (monto / tasa);
+      }
+    }
+
+    // Verificación final del monto cubierto (tolerancia de $0.01 por redondeo decimal)
+    if (sumaUSD < (verState.totalUSD - 0.01)) {
+      const faltante = verState.totalUSD - sumaUSD;
+      alert(`El pago total ingresado ($${sumaUSD.toFixed(2)}) no cubre la compra. Faltan $${faltante.toFixed(2)}.`);
+      return false;
+    }
+  }
+
   if (metodo === 'OTROS') {
-    const obs  = document.getElementById('verObsOTROS')?.value.trim();
+    const obs = document.getElementById('verObsOTROS')?.value.trim();
     if (!obs) {
       alert('Para el método OTROS, detalla las observaciones.');
       return false;
@@ -457,7 +669,6 @@ function _validarPago() {
 
   return true;
 }
-
 
 // ---------------------------------------------------------------------------
 // 9. Aprobar factura — con datos de pago editados
@@ -478,21 +689,78 @@ async function aprobarFacturaActual() {
   btn.disabled = true;
   mostrarCargando(true);
 
-
   const metodo = document.getElementById('verMetodoPago')?.value || 'OTROS';
   const obs =
     document.getElementById('verObsOTROS')?.value.trim() ||
     document.getElementById('verObsED')?.value.trim()    || '';
+
+  // Variables para recopilar la información del pago
+  let banco = 'N/A';
+  let referencia = 'N/A';
+  let pagosCombinados = [];
+  let metodoPagoTexto = formatMetodoPago ? formatMetodoPago(metodo) : metodo;
+
+  // Lógica de extracción según el método seleccionado
+  if (metodo === 'COMB') {
+    const checkboxes = document.querySelectorAll('.mix-method-chk:checked');
+    const bancosList = [];
+    const refsList = [];
+    const detallesTexto = [];
+
+    checkboxes.forEach(chk => {
+      const val = chk.value;
+
+      if (val === 'PM') {
+        const montoBs = Number(document.querySelector('input[name="comb_pm_monto"]')?.value) || 0;
+        const bank    = document.querySelector('select[name="comb_pm_banco"]')?.value || '';
+        const ref     = document.querySelector('input[name="comb_pm_ref"]')?.value.trim() || '';
+
+        pagosCombinados.push({ metodo: 'Pago Móvil', codigo: 'PM', montoBs, banco: bank, referencia: ref });
+        if (bank) bancosList.push(`PM: ${bank}`);
+        if (ref) refsList.push(`PM: ${ref}`);
+        detallesTexto.push(`Pago Móvil (${bank}): Bs ${montoBs.toFixed(2)} - Ref: ${ref}`);
+
+      } else if (val === 'ED') {
+        const montoUSD = Number(document.querySelector('input[name="comb_ed_monto"]')?.value) || 0;
+
+        pagosCombinados.push({ metodo: 'Efectivo ($)', codigo: 'ED', montoUSD });
+        detallesTexto.push(`Efectivo ($): $${montoUSD.toFixed(2)}`);
+
+      } else if (val === 'EBS') {
+        const montoBs = Number(document.querySelector('input[name="comb_ebs_monto"]')?.value) || 0;
+
+        pagosCombinados.push({ metodo: 'Efectivo (Bs)', codigo: 'EBS', montoBs });
+        detallesTexto.push(`Efectivo (Bs): Bs ${montoBs.toFixed(2)}`);
+
+      } else if (val === 'PVD') {
+        const montoBs = Number(document.querySelector('input[name="comb_pvd_monto"]')?.value) || 0;
+        const ref     = document.querySelector('input[name="comb_pvd_ref"]')?.value.trim() || '';
+
+        pagosCombinados.push({ metodo: 'Punto de Venta', codigo: 'PVD', montoBs, referencia: ref });
+        if (ref) refsList.push(`Punto: ${ref}`);
+        detallesTexto.push(`Punto de Venta: Bs ${montoBs.toFixed(2)} - Ref: ${ref}`);
+      }
+    });
+
+    banco = bancosList.length > 0 ? bancosList.join(' | ') : 'N/A';
+    referencia = refsList.length > 0 ? refsList.join(' | ') : 'N/A';
+    metodoPagoTexto = `Pago Combinado: [ ${detallesTexto.join(' + ')} ]`;
+
+  } else if (metodo === 'PM') {
+    banco = document.getElementById('verBankSelect')?.value || 'N/A';
+    referencia = document.getElementById('verPmRef')?.value?.trim() || 'N/A';
+  }
 
   const payload = {
     id_factura: _facturaActual.id_factura,
     estado:     'aprobado',
 
     // Datos de pago actualizados
-    metodo_pago:  metodo,
-    banco:        document.getElementById('verBankSelect')?.value || 'N/A',
-    referencia:   document.getElementById('verPmRef')?.value      || 'N/A',
-    observaciones: obs || 'N/A',
+    metodo_pago:      metodo,
+    banco:            banco,
+    referencia:       referencia,
+    observaciones:    obs || 'N/A',
+    pagos_combinados: pagosCombinados, // Array estructurado si la API lo soporta
 
     // Totales recalculados
     subtotal_usd:  verState.subtotalUSD,
@@ -502,10 +770,10 @@ async function aprobarFacturaActual() {
 
     // Productos editados
     productos: verState.productos.map(p => ({
-      nombre:        p.nombre,
-      cantidad:      p.cantidad,
+      nombre:         p.nombre,
+      cantidad:       p.cantidad,
       precioUnitario: p.precioUnitario,
-      precioTotal:   p.precioTotal,
+      precioTotal:    p.precioTotal,
     })),
   };
 
@@ -521,25 +789,24 @@ async function aprobarFacturaActual() {
     if (json.status === 'success') {
       mostrarModalExito('Factura aprobada correctamente. Si el papel se traba o se termina, usa los botones de abajo para reimprimir.');
 
-      // Guardamos los datos para poder reimprimir en cualquier momento
-      // (papel trabado, impresora sin conexión, corte de luz, etc.) sin
-      // tener que reconstruir la factura desde cero.
+      // Guardamos los datos completos para la nota de entrega
       const datosNota = {
-        id_factura:   _facturaActual.id_factura,
-        nombre:       _facturaActual.nombre,
-        apellido:     _facturaActual.apellido,
-        cedula:       _facturaActual.cedula,
-        telefono:     _facturaActual.telefono,
-        vendedor:     _facturaActual.vendedor,
-        metodoPagoTexto: formatMetodoPago(metodo),
-        banco:        payload.banco,
-        referencia:   payload.referencia,
-        productos:    verState.productos,
-        subtotalUSD:  verState.subtotalUSD,
-        descuentoUSD: verState.descuentoUSD,
-        totalUSD:     verState.totalUSD,
-        totalBS:      verState.totalBS,
-        tasaCambio:   Number(verState.tasaCambio) || 1,
+        id_factura:      _facturaActual.id_factura,
+        nombre:          _facturaActual.nombre,
+        apellido:        _facturaActual.apellido,
+        cedula:          _facturaActual.cedula,
+        telefono:        _facturaActual.telefono,
+        vendedor:        _facturaActual.vendedor,
+        metodoPagoTexto: metodoPagoTexto,
+        banco:           payload.banco,
+        referencia:      payload.referencia,
+        pagosCombinados: pagosCombinados,
+        productos:       verState.productos,
+        subtotalUSD:     verState.subtotalUSD,
+        descuentoUSD:    verState.descuentoUSD,
+        totalUSD:        verState.totalUSD,
+        totalBS:         verState.totalBS,
+        tasaCambio:      Number(verState.tasaCambio) || 1,
       };
 
       try {
@@ -552,10 +819,6 @@ async function aprobarFacturaActual() {
         );
       }
 
-      // Ya NO se recarga automáticamente. El usuario decide cuándo
-      // continuar (botón "Continuar" del modal), para tener todo el
-      // tiempo que necesite si tiene que reimprimir por un fallo de papel,
-      // atasco o desconexión de la impresora.
     } else {
       mostrarModalError(json.message || 'No se pudo aprobar la factura.');
       btn.disabled = false;
@@ -564,13 +827,6 @@ async function aprobarFacturaActual() {
     mostrarModalError('Error de conexión: ' + err.message);
     btn.disabled = false;
   }
-}
-
-/** Se ejecuta cuando el usuario ya terminó de imprimir/reimprimir y confirma. */
-function continuarDespuesDeAprobar() {
-  cerrarModal();
-  limpiarDetalle();
-  window.location.reload();
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +855,43 @@ function _construirNotaEntregaHTML(datos) {
 
   const filasProductos = (datos.productos || []).map(_filaProductoNota).join('');
 
+  // Generación dinámica de la sección de pago (Combinado vs Tradicional)
+  let bloquePagoHTML = '';
+
+  if (datos.pagosCombinados && datos.pagosCombinados.length > 0) {
+    const renglonesPago = datos.pagosCombinados.map(p => {
+      let info = `<strong>${escapeHtml(p.metodo)}:</strong> `;
+
+      if (p.montoUSD) {
+        info += `$${Number(p.montoUSD).toFixed(2)}`;
+      } else if (p.montoBs) {
+        info += `Bs ${Number(p.montoBs).toFixed(2)}`;
+      }
+
+      const extras = [];
+      if (p.banco) extras.push(escapeHtml(p.banco));
+      if (p.referencia) extras.push(`Ref: ${escapeHtml(p.referencia)}`);
+
+      if (extras.length > 0) {
+        info += ` <span style="font-size: 0.85em;">(${extras.join(' - ')})</span>`;
+      }
+
+      return `<p style="margin: 2px 0 2px 8px; font-size: 0.9em;">• ${info}</p>`;
+    }).join('');
+
+    bloquePagoHTML = `
+      <div style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ccc;">
+        <p style="margin-bottom: 2px;"><strong>Método de pago:</strong> Combinado</p>
+        ${renglonesPago}
+      </div>`;
+  } else {
+    bloquePagoHTML = `
+      <p><strong>Método de pago:</strong> ${escapeHtml(datos.metodoPagoTexto || 'N/A')}</p>
+      ${datos.banco && datos.banco !== 'N/A' ? `<p><strong>Banco:</strong> ${escapeHtml(datos.banco)}</p>` : ''}
+      ${datos.referencia && datos.referencia !== 'N/A' ? `<p><strong>Referencia:</strong> ${escapeHtml(datos.referencia)}</p>` : ''}
+    `;
+  }
+
   return `
     <section class="nota">
       <div class="nota-header">
@@ -612,9 +905,7 @@ function _construirNotaEntregaHTML(datos) {
         <p><strong>Cédula:</strong> ${escapeHtml(datos.cedula || 'N/A')}</p>
         <p><strong>Teléfono:</strong> ${escapeHtml(datos.telefono || 'N/A')}</p>
         <p><strong>Vendedor:</strong> ${escapeHtml(datos.vendedor || 'N/A')}</p>
-        <p><strong>Método de pago:</strong> ${escapeHtml(datos.metodoPagoTexto || 'N/A')}</p>
-        ${datos.banco && datos.banco !== 'N/A' ? `<p><strong>Banco:</strong> ${escapeHtml(datos.banco)}</p>` : ''}
-        ${datos.referencia && datos.referencia !== 'N/A' ? `<p><strong>Referencia:</strong> ${escapeHtml(datos.referencia)}</p>` : ''}
+        ${bloquePagoHTML}
       </div>
       <table class="nota-tabla">
         <thead><tr><th>Cant</th><th>Producto</th><th class="der">Total $</th></tr></thead>
