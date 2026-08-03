@@ -50,21 +50,28 @@ En **Table Editor / Database → tu tabla → RLS**, para cada tabla sensible
   corresponda) para cada tabla y cada operación que el frontend necesite.
 
 En **Storage → bucket `comprobantes` → Policies**:
-- Este bucket es especial: `subir-comprobante.html` lo usa **sin login**
-  (lo abre el cliente final desde un QR). No actives "solo autenticados"
-  aquí o rompes esa función.
-- En su lugar, limita la política de `INSERT` para el rol `anon` a la
-  ruta esperada (`qr/*`) y a los tipos/tamaños ya validados en el frontend,
-  y **no** le des permisos de `SELECT`/`DELETE` públicos sobre el bucket
-  completo — solo lo necesario para que Verificación (ya autenticada) pueda
-  leer los comprobantes.
+- **Cambio importante respecto a versiones anteriores:** el flujo que
+  permitía a un cliente final subir su comprobante sin sesión (vía un
+  código QR, desde `subir-comprobante.html`) fue eliminado del sistema.
+  Ya no existe ninguna pantalla que necesite escribir en este bucket sin
+  autenticación.
+- En consecuencia, ya puedes restringir este bucket a **solo usuarios
+  autenticados** (tanto lectura como escritura), sin excepciones para el
+  rol `anon`. Si en tu proyecto de Supabase quedó una política antigua
+  que permitía `INSERT` público en la ruta `qr/*`, revísala y elimínala —
+  ya no cumple ninguna función y solo amplía la superficie de riesgo.
+- Este bucket hoy solo se usa en modo lectura, desde el Panel de
+  administración, para mostrar comprobantes de facturas antiguas que ya
+  los tenían guardados de antes del cambio.
 
 ## 3. Las funciones serverless (`api/*.py`) ya están bien encaminadas
 
 Usan `SUPABASE_SECRET_KEY` (clave de servicio), configurada como variable de
 entorno en Vercel — nunca debe copiarse al frontend. Verifica en el panel de
-Vercel (**Project → Settings → Environment Variables**) que `SUPABASE_URL`,
-`SUPABASE_SECRET_KEY` y `FRONTEND_DOMAIN` estén definidas solo ahí.
+Vercel (**Project → Settings → Environment Variables**) que `SUPABASE_URL` y
+`SUPABASE_SECRET_KEY` estén definidas solo ahí. (`FRONTEND_DOMAIN` también
+aparece declarada en el código con un valor por defecto, pero no se usa
+actualmente para nada sensible.)
 
 ## 4. Páginas protegidas vs. públicas
 
@@ -78,7 +85,6 @@ Vercel (**Project → Settings → Environment Variables**) que `SUPABASE_URL`,
 | `assets/pages/reportes.html` | Sí |
 | `assets/pages/administrador.html` | Sí |
 | `assets/pages/login.html` | No (es la puerta de entrada) |
-| `assets/pages/subir-comprobante.html` | No — la abre el cliente final desde un QR, sin cuenta |
 
 ## 5. Roles: admin vs. personal
 
