@@ -16,10 +16,8 @@
 //     index.html para esconder las tarjetas de Administrador/Reportes,
 //     o en cualquier botón/acción que quieras limitar).
 //
-// Quedan FUERA de esta protección, a propósito:
-//   - login.html            → tiene que ser accesible sin sesión.
-//   - subir-comprobante.html → la abre el CLIENTE final desde el QR,
-//                              sin cuenta en el sistema.
+// Queda FUERA de esta protección, a propósito:
+//   - login.html → tiene que ser accesible sin sesión.
 //
 // AVISO IMPORTANTE (léase también SECURITY.md):
 // Esto controla el acceso desde el navegador, pero la clave "anon" de
