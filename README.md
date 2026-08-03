@@ -4,7 +4,6 @@
 *Sistema web de gestión comercial: facturación, pedidos, verificación de pagos, reportes y panel administrativo*
 
 Versión del documento: 1.1
-Generado a partir del repositorio: `Comercial-Jenk-Caceres-main`
 
 ---
 
