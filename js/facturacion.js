@@ -331,6 +331,7 @@ function actualizarTabla() {
         >
           <i class="fa-solid ${excluido ? "fa-rotate-left" : "fa-tag"}"></i>
         </button>
+        <button class="btn-editar" data-index="${index}" title="Editar producto"><i class="fa-solid fa-pen"></i></button>
         <button class="btn-eliminar" data-index="${index}"> <i class="fa-solid fa-trash"></i> </button>
       </td>
     `;
@@ -423,6 +424,13 @@ function configurarDelegacionEventos() {
       return;
     }
 
+    const botonEditar = e.target.closest(".btn-editar");
+    if (botonEditar) {
+      const index = parseInt(botonEditar.getAttribute("data-index"), 10);
+      abrirModalEditarProducto(index);
+      return;
+    }
+
     const botonToggleDesc = e.target.closest(".btn-toggle-desc");
     if (botonToggleDesc) {
       const index = parseInt(botonToggleDesc.getAttribute("data-index"), 10);
@@ -434,6 +442,88 @@ function configurarDelegacionEventos() {
     }
   });
 }
+
+//--- MODAL DE EDICIÓN DE PRODUCTO (FACTURACIÓN) ---//
+function abrirModalEditarProducto(index) {
+  const producto = state.listaProductos[index];
+  if (!producto) return;
+
+  // Crear modal si no existe
+  let modal = document.getElementById("modalEditarProductoFac");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "modalEditarProductoFac";
+    modal.className = "modal-editar-producto";
+    modal.innerHTML = `
+      <div class="modal-editar-inner">
+        <h3><i class="fa-solid fa-pen"></i> Editar producto</h3>
+        <div class="campo-editar">
+          <label>Cantidad</label>
+          <input type="number" id="editFacCant" min="1" step="1">
+        </div>
+        <div class="campo-editar">
+          <label>Nombre</label>
+          <input type="text" id="editFacNombre">
+        </div>
+        <div class="campo-editar">
+          <label>Precio unitario (USD)</label>
+          <input type="number" id="editFacPrecioUnd" min="0" step="0.01">
+        </div>
+        <div class="acciones-modal-editar">
+          <button class="btn-secondary" onclick="cerrarModalEditarProductoFac()">Cancelar</button>
+          <button class="btn-primary" onclick="guardarEdicionProductoFac()">Guardar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  modal.dataset.index = index;
+  document.getElementById("editFacCant").value = producto.cantidad;
+  document.getElementById("editFacNombre").value = producto.nombre;
+  document.getElementById("editFacPrecioUnd").value = producto.precioUnitario;
+  modal.classList.remove("hidden");
+}
+
+function cerrarModalEditarProductoFac() {
+  const modal = document.getElementById("modalEditarProductoFac");
+  if (modal) modal.classList.add("hidden");
+}
+
+function guardarEdicionProductoFac() {
+  const modal = document.getElementById("modalEditarProductoFac");
+  if (!modal) return;
+  const index = parseInt(modal.dataset.index, 10);
+  const producto = state.listaProductos[index];
+  if (!producto) return;
+
+  const cant = Number(document.getElementById("editFacCant").value);
+  const nombre = document.getElementById("editFacNombre").value.trim();
+  const precioUnd = Number(document.getElementById("editFacPrecioUnd").value);
+
+  if (!nombre || cant <= 0 || precioUnd <= 0) {
+    alert("Por favor, completa correctamente cantidad, nombre y precio unitario.");
+    return;
+  }
+
+  producto.cantidad = cant;
+  producto.nombre = nombre;
+  producto.precioUnitario = precioUnd;
+  producto.precioUnitarioBS = precioUnd * state.tasaConver;
+  producto.precioTotal = cant * precioUnd;
+  producto.precioTotalBS = producto.precioTotal * state.tasaConver;
+
+  cerrarModalEditarProductoFac();
+  actualizarTabla();
+}
+
+// Cerrar modal editar al hacer click fuera
+document.addEventListener("click", (e) => {
+  const modal = document.getElementById("modalEditarProductoFac");
+  if (modal && !modal.classList.contains("hidden") && e.target === modal) {
+    cerrarModalEditarProductoFac();
+  }
+});
 
 function calcularPrecioTotal() {
   const cantidadInput = document.getElementById("cantProduct");

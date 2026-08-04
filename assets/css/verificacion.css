@@ -321,7 +321,7 @@ label:has(.mix-method-chk:checked) {
 .table-responsive table th:nth-child(6),
 .table-responsive table td:nth-child(6) { width: 95px; text-align: right; }
 .table-responsive table th:nth-child(7),
-.table-responsive table td:nth-child(7) { width: 65px; text-align: center; }
+.table-responsive table td:nth-child(7) { width: 105px; text-align: center; }
 
 .table-empty {
   text-align: center; color: var(--muted);

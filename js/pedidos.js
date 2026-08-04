@@ -384,6 +384,13 @@ function _manejarClickTabla(e) {
     return;
   }
 
+  const btnEditar = e.target.closest('.btn-editar');
+  if (btnEditar) {
+    const idx = parseInt(btnEditar.dataset.index, 10);
+    _abrirModalEditarProductoPed(idx);
+    return;
+  }
+
   const btnToggle = e.target.closest('.btn-toggle-desc');
   if (btnToggle) {
     const idx = parseInt(btnToggle.dataset.index, 10);
@@ -395,6 +402,87 @@ function _manejarClickTabla(e) {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Modal de edición de producto (Pedidos)
+// ---------------------------------------------------------------------------
+function _abrirModalEditarProductoPed(index) {
+  if (!_pedidoActual) return;
+  const producto = _pedidoActual.productos[index];
+  if (!producto) return;
+
+  let modal = document.getElementById('modalEditarProductoPed');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalEditarProductoPed';
+    modal.className = 'modal-editar-producto';
+    modal.innerHTML = `
+      <div class="modal-editar-inner">
+        <h3><i class="fa-solid fa-pen"></i> Editar producto</h3>
+        <div class="campo-editar">
+          <label>Cantidad</label>
+          <input type="number" id="editPedCant" min="1" step="1">
+        </div>
+        <div class="campo-editar">
+          <label>Nombre</label>
+          <input type="text" id="editPedNombre">
+        </div>
+        <div class="campo-editar">
+          <label>Precio unitario (USD)</label>
+          <input type="number" id="editPedPrecioUnd" min="0" step="0.01">
+        </div>
+        <div class="acciones-modal-editar">
+          <button class="btn-secondary" onclick="_cerrarModalEditarProductoPed()">Cancelar</button>
+          <button class="btn-primary" onclick="_guardarEdicionProductoPed()">Guardar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) _cerrarModalEditarProductoPed();
+    });
+  }
+
+  modal.dataset.index = index;
+  document.getElementById('editPedCant').value = producto.cantidad;
+  document.getElementById('editPedNombre').value = producto.nombre;
+  document.getElementById('editPedPrecioUnd').value = producto.precioUnitario;
+  modal.classList.remove('hidden');
+}
+
+function _cerrarModalEditarProductoPed() {
+  const modal = document.getElementById('modalEditarProductoPed');
+  if (modal) modal.classList.add('hidden');
+}
+window._cerrarModalEditarProductoPed = _cerrarModalEditarProductoPed;
+
+function _guardarEdicionProductoPed() {
+  if (!_pedidoActual) return;
+  const modal = document.getElementById('modalEditarProductoPed');
+  if (!modal) return;
+  const index = parseInt(modal.dataset.index, 10);
+  const producto = _pedidoActual.productos[index];
+  if (!producto) return;
+
+  const cant = Number(document.getElementById('editPedCant').value);
+  const nombre = document.getElementById('editPedNombre').value.trim();
+  const precioUnd = Number(document.getElementById('editPedPrecioUnd').value);
+
+  if (!nombre || cant <= 0 || precioUnd <= 0) {
+    alert('Por favor, completa correctamente cantidad, nombre y precio unitario.');
+    return;
+  }
+
+  producto.cantidad = cant;
+  producto.nombre = nombre;
+  producto.precioUnitario = precioUnd;
+  producto.precioTotal = cant * precioUnd;
+
+  _cerrarModalEditarProductoPed();
+  _renderizarTabla();
+  _guardarBorradorLocal();
+}
+window._guardarEdicionProductoPed = _guardarEdicionProductoPed;
 
 // ---------------------------------------------------------------------------
 // 6. Cálculo de totales
@@ -459,6 +547,9 @@ function _renderizarTabla() {
             title="${excluido ? 'Volver a incluir en el descuento' : 'Excluir del descuento'}"
           >
             <i class="fa-solid ${excluido ? 'fa-rotate-left' : 'fa-tag'}"></i>
+          </button>
+          <button class="btn-editar" data-index="${i}" title="Editar producto">
+            <i class="fa-solid fa-pen"></i>
           </button>
           <button class="btn-eliminar" data-index="${i}" title="Eliminar producto">
             <i class="fa-solid fa-trash"></i>

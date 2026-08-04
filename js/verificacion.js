@@ -187,6 +187,13 @@ function _manejarClickTabla(e) {
     return;
   }
 
+  const btnEditar = e.target.closest('.btn-editar');
+  if (btnEditar) {
+    const idx = parseInt(btnEditar.dataset.index, 10);
+    _abrirModalEditarProductoVer(idx);
+    return;
+  }
+
   const btnToggle = e.target.closest('.btn-toggle-desc');
   if (btnToggle) {
     const idx = parseInt(btnToggle.dataset.index, 10);
@@ -197,6 +204,84 @@ function _manejarClickTabla(e) {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Modal de edición de producto (Verificación)
+// ---------------------------------------------------------------------------
+function _abrirModalEditarProductoVer(index) {
+  const producto = verState.productos[index];
+  if (!producto) return;
+
+  let modal = document.getElementById('modalEditarProductoVer');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalEditarProductoVer';
+    modal.className = 'modal-editar-producto';
+    modal.innerHTML = `
+      <div class="modal-editar-inner">
+        <h3><i class="fa-solid fa-pen"></i> Editar producto</h3>
+        <div class="campo-editar">
+          <label>Cantidad</label>
+          <input type="number" id="editVerCant" min="1" step="1">
+        </div>
+        <div class="campo-editar">
+          <label>Nombre</label>
+          <input type="text" id="editVerNombre">
+        </div>
+        <div class="campo-editar">
+          <label>Precio unitario (USD)</label>
+          <input type="number" id="editVerPrecioUnd" min="0" step="0.01">
+        </div>
+        <div class="acciones-modal-editar">
+          <button class="btn-secondary" onclick="_cerrarModalEditarProductoVer()">Cancelar</button>
+          <button class="btn-primary" onclick="_guardarEdicionProductoVer()">Guardar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) _cerrarModalEditarProductoVer();
+    });
+  }
+
+  modal.dataset.index = index;
+  document.getElementById('editVerCant').value = producto.cantidad;
+  document.getElementById('editVerNombre').value = producto.nombre;
+  document.getElementById('editVerPrecioUnd').value = producto.precioUnitario;
+  modal.classList.remove('hidden');
+}
+
+function _cerrarModalEditarProductoVer() {
+  const modal = document.getElementById('modalEditarProductoVer');
+  if (modal) modal.classList.add('hidden');
+}
+window._cerrarModalEditarProductoVer = _cerrarModalEditarProductoVer;
+
+function _guardarEdicionProductoVer() {
+  const modal = document.getElementById('modalEditarProductoVer');
+  if (!modal) return;
+  const index = parseInt(modal.dataset.index, 10);
+  const producto = verState.productos[index];
+  if (!producto) return;
+
+  const cant = Number(document.getElementById('editVerCant').value);
+  const nombre = document.getElementById('editVerNombre').value.trim();
+  const precioUnd = Number(document.getElementById('editVerPrecioUnd').value);
+
+  if (!nombre || cant <= 0 || precioUnd <= 0) {
+    alert('Por favor, completa correctamente cantidad, nombre y precio unitario.');
+    return;
+  }
+
+  producto.cantidad = cant;
+  producto.nombre = nombre;
+  producto.precioUnitario = precioUnd;
+  producto.precioTotal = cant * precioUnd;
+
+  _cerrarModalEditarProductoVer();
+  verActualizarTabla();
+}
+window._guardarEdicionProductoVer = _guardarEdicionProductoVer;
 
 /**
  * Recalcula subtotales, descuentos y totales de la factura temporal activa
@@ -275,6 +360,9 @@ function verActualizarTabla() {
             title="${excluido ? 'Volver a incluir en el descuento' : 'Sacar del descuento (se suma completo al total)'}"
           >
             <i class="fa-solid ${excluido ? 'fa-rotate-left' : 'fa-tag'}"></i>
+          </button>
+          <button class="btn-editar" data-index="${i}" title="Editar producto">
+            <i class="fa-solid fa-pen"></i>
           </button>
           <button class="btn-eliminar" data-index="${i}" title="Eliminar producto">
             <i class="fa-solid fa-trash"></i>

@@ -213,6 +213,42 @@ button.process:hover {
 }
 .btn-eliminar:hover { color: var(--danger-hover); transform: scale(1.12); }
 
+/* Editar producto (lápiz) */
+.btn-editar {
+  background: none; border: none;
+  color: var(--rose); cursor: pointer;
+  font-size: 1rem; width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  transition: color .2s, transform .2s;
+}
+.btn-editar:hover { color: var(--rose-deep, #4f46e5); transform: scale(1.12); }
+
+/* Modal de edición de producto inline */
+.modal-editar-producto {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.45);
+}
+.modal-editar-producto.hidden { display: none; }
+.modal-editar-producto .modal-editar-inner {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px; width: calc(100% - 32px);
+  max-width: 420px; box-shadow: var(--shadow-md);
+}
+.modal-editar-producto h3 {
+  margin: 0 0 18px; font-size: 1rem; font-weight: 600;
+}
+.modal-editar-producto .campo-editar {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;
+}
+.modal-editar-producto .campo-editar label {
+  font-size: .75rem; font-weight: 500; color: var(--muted);
+}
+.modal-editar-producto .acciones-modal-editar {
+  display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;
+}
+
 /* ── Formularios ── */
 input, select, textarea {
   width: 100%;
