@@ -35,10 +35,16 @@
     return;
   }
 
-  // Páginas que solo puede ver el rol "admin". Se comparan por el
-  // nombre de archivo, así que funcionan sin importar desde dónde se
-  // incluya este script.
+  // Páginas que solo puede ver el rol "admin" (y "sysAdmin", que hereda
+  // todo lo que puede ver un admin). Se comparan por el nombre de
+  // archivo, así que funcionan sin importar desde dónde se incluya
+  // este script.
   const PAGINAS_SOLO_ADMIN = ["administrador.html", "reportes.html"];
+
+  // Páginas exclusivas de "sysAdmin" (NO las ve un "admin" normal).
+  // Por ahora solo el panel donde se publican las notificaciones que
+  // ve todo el personal en la campanita (ver js/campanita.js).
+  const PAGINAS_SOLO_SYSADMIN = ["notificaciones.html"];
 
   // Detecta si estamos dentro de assets/pages/ o en la raíz (index.html),
   // para calcular las rutas relativas correctas hacia login.html / index.html.
@@ -48,6 +54,7 @@
 
   const paginaActual = location.pathname.split("/").pop();
   const esPaginaSoloAdmin = PAGINAS_SOLO_ADMIN.includes(paginaActual);
+  const esPaginaSoloSysAdmin = PAGINAS_SOLO_SYSADMIN.includes(paginaActual);
 
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   window.__authClient = client;
@@ -104,13 +111,20 @@
     history.replaceState(null, "", location.pathname + (queryLimpio ? `?${queryLimpio}` : ""));
   }
 
-  // Oculta cualquier elemento marcado como solo-admin cuando el usuario
-  // que inició sesión no tiene ese rol (ej. tarjetas de la portada).
-  function aplicarVisibilidadPorRol(esAdmin) {
-    if (esAdmin) return;
-    document.querySelectorAll("[data-admin-only]").forEach((el) => {
-      el.style.display = "none";
-    });
+  // Oculta cualquier elemento marcado como solo-admin o solo-sysAdmin
+  // cuando el usuario que inició sesión no tiene ese rol (ej. tarjetas
+  // de la portada).
+  function aplicarVisibilidadPorRol(esAdmin, esSysAdmin) {
+    if (!esAdmin) {
+      document.querySelectorAll("[data-admin-only]").forEach((el) => {
+        el.style.display = "none";
+      });
+    }
+    if (!esSysAdmin) {
+      document.querySelectorAll("[data-sysadmin-only]").forEach((el) => {
+        el.style.display = "none";
+      });
+    }
   }
 
   async function obtenerRol(userId) {
@@ -143,17 +157,27 @@
 
     const rol = await obtenerRol(data.session.user.id);
     window.__authRole = rol;
-    const esAdmin = rol === "admin";
+    // "sysAdmin" es un superset de "admin": ve todo lo que ve un admin,
+    // más el panel exclusivo de notificaciones (ver PAGINAS_SOLO_SYSADMIN).
+    const esSysAdmin = rol === "sysAdmin";
+    const esAdmin = rol === "admin" || esSysAdmin;
+    window.__authIsAdmin = esAdmin;
+    window.__authIsSysAdmin = esSysAdmin;
 
     if (esPaginaSoloAdmin && !esAdmin) {
+      irASinPermiso();
+      return;
+    }
+    if (esPaginaSoloSysAdmin && !esSysAdmin) {
       irASinPermiso();
       return;
     }
 
     alListo(() => {
       mostrarBotonSalir();
-      aplicarVisibilidadPorRol(esAdmin);
+      aplicarVisibilidadPorRol(esAdmin, esSysAdmin);
       mostrarAvisoSinPermiso();
+      document.dispatchEvent(new CustomEvent("cjc:rol-listo", { detail: { rol, esAdmin, esSysAdmin } }));
     });
   });
 

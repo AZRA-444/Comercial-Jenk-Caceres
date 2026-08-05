@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="../css/main.css"/>
+  <link rel="icon" type="image/png" href="../img/favicon.ico">
+  <title>Notificaciones — Comercial Jenk Cáceres</title>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      Notificaciones del sistema
+      <small>Solo sysAdmin</small>
+    </div>
+    <div class="clock" id="clock"></div>
+    <a class="btn-volver" href="../../index.html">
+      <i class="fas fa-arrow-left"></i> Volver
+    </a>
+  </div>
+
+  <div class="wrap fade-in-up">
+
+    <!-- Formulario: nueva notificación -->
+    <div class="table-wrap" style="padding:20px 22px;">
+      <h2 style="font-size:.95rem;font-weight:700;color:var(--ink);margin-bottom:16px;">
+        <i class="fas fa-bell" style="color:var(--rose);margin-right:6px"></i>Publicar notificación
+      </h2>
+
+      <form id="formNotificacion" style="display:grid;gap:14px;">
+        <input type="hidden" id="notifId" value=""/>
+
+        <label class="form-field">
+          Título
+          <input type="text" id="notifTitulo" maxlength="120" placeholder="Ej: Nueva forma de pago disponible" required/>
+        </label>
+
+        <label class="form-field">
+          Mensaje
+          <textarea id="notifMensaje" maxlength="800" rows="3" placeholder="Explica brevemente el cambio o la novedad" required style="font-family:inherit;font-size:.9rem;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);resize:vertical;"></textarea>
+        </label>
+
+        <label class="form-field">
+          Tipo
+          <select id="notifTipo" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.9rem;">
+            <option value="novedad">Novedad</option>
+            <option value="mejora">Mejora</option>
+            <option value="aviso">Aviso</option>
+            <option value="urgente">Urgente</option>
+          </select>
+        </label>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+          <button type="button" id="btnCancelarEdicion" class="btn-secondary" style="display:none;">Cancelar edición</button>
+          <button type="submit" id="btnGuardarNotif" class="btn-primary">
+            <i class="fas fa-paper-plane"></i> Publicar
+          </button>
+        </div>
+        <div class="status-msg" id="notifStatusMsg"></div>
+      </form>
+    </div>
+
+    <!-- Listado -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="text-wrap">Título / mensaje</th>
+            <th>Tipo</th>
+            <th>Fecha</th>
+            <th class="text-center">Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tablaNotificaciones">
+          <tr><td colspan="5" class="empty-state">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../js/supabase-config.js"></script>
+  <script src="../../js/utils.js"></script>
+  <script src="../../js/auth-guard.js"></script>
+  <script src="../../js/notificaciones-admin.js"></script>
+  <script src="../../js/campanita.js"></script>
+</body>
+</html>
