@@ -436,6 +436,50 @@ label:has(.mix-method-chk:checked) {
   background-size: cover; background-position: center;
 }
 
+/* ── Constructor de Pago Combinado ── */
+.comb-builder {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.comb-add-row {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px;
+}
+.comb-add-row .form-field { flex: 1 1 140px; min-width: 130px; }
+.comb-campos-dinamicos {
+  display: flex; flex-wrap: wrap; gap: 10px; flex: 2 1 260px;
+}
+.comb-campos-dinamicos .form-field { flex: 1 1 130px; min-width: 120px; }
+.comb-btn-add {
+  flex: 0 0 auto; white-space: nowrap; height: fit-content;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+.comb-tabla-wrap { margin: 0; }
+.comb-tabla { width: 100%; min-width: 420px; border-collapse: collapse; }
+.comb-tabla thead { background: var(--surface-1); }
+.comb-tabla th {
+  text-align: left; font-size: .72rem; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--muted); padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.comb-tabla td {
+  padding: 8px 10px; font-size: .85rem; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.comb-tabla tbody tr:last-child td { border-bottom: none; }
+.comb-tabla tbody tr:hover { background: var(--rose-faint); }
+
+.comb-summary {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.comb-summary .total-row { font-size: .85rem; }
+.comb-summary .comb-sub { font-size: .8rem; font-weight: 400; color: var(--text-secondary); }
+.comb-restante { color: var(--danger); }
+.comb-restante.cubierto { color: var(--success); }
+
 /* ── Empty state ── */
 .empty-state {
   display: flex; flex-direction: column; align-items: center;
