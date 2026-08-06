@@ -19,8 +19,7 @@ const verState = {
 // Catálogo de bancos y de métodos combinables (usado por PM, TRANSF y COMB)
 // ---------------------------------------------------------------------------
 const BANCOS_VE = [
-  'Banesco', 'Banco de Venezuela', 'Provincial', 'Banplus',
-  'BNC', 'Mercantil', 'Bancaribe', 'Banco del Tesoro', 'Otro',
+  'Banesco', 'Banco de Venezuela', 'Provincial', 'Banplus'
 ];
 
 function _bancosOptionsHtml(seleccionado = '') {
