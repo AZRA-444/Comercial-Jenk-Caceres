@@ -11,7 +11,13 @@ MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB (ediciones normales de campos y aprob
 # Métodos de pago que el sistema realmente sabe procesar; igual que en
 # guardar-factura.py, cualquier otro valor se rechaza en vez de guardarse
 # "tal cual" en la tabla definitiva.
-METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
+# TRANSF = Transferencia bancaria (standalone). COMB = Pago Combinado, cuyas
+# líneas individuales llegan en "pagos_combinados" (ver _validar_pagos_combinados).
+METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "TRANSF", "COMB", "OTROS"}
+
+# Sub-métodos que pueden aparecer dentro de una línea de Pago Combinado.
+SUBMETODOS_COMBINABLES = {"PM", "TRANSF", "PVD", "PVC", "ED", "EBS"}
+MAX_LINEAS_PAGO_COMBINADO = 20
 
 MAX_PRODUCTOS_POR_FACTURA = 150
 LONGITUD_MAXIMA_NOMBRE_PRODUCTO = 120
@@ -78,6 +84,72 @@ def _validar_productos_editados(productos):
             return f"Producto #{i+1} ({nombre}): precio total inválido"
 
     return None
+
+
+def _validar_pagos_combinados(pagos, total_usd, tasa_cambio):
+    """Valida la lista de líneas de un Pago Combinado (metodo_pago == 'COMB').
+    Cada línea representa un pago individual (ej. un Pago Móvil, una
+    Transferencia Bancaria, un monto en Efectivo, etc.) y varias líneas
+    pueden compartir el mismo código de método (ej. dos Pagos Móviles de
+    teléfonos distintos).
+
+    Devuelve (mensaje_de_error | None, suma_total_en_usd).
+    """
+    if not isinstance(pagos, list) or not pagos:
+        return "El Pago Combinado debe incluir al menos un método de pago", 0.0
+    if len(pagos) > MAX_LINEAS_PAGO_COMBINADO:
+        return f"El Pago Combinado no puede tener más de {MAX_LINEAS_PAGO_COMBINADO} líneas", 0.0
+
+    tasa = float(tasa_cambio) if tasa_cambio else 1.0
+    suma_usd = 0.0
+
+    for i, p in enumerate(pagos):
+        etiqueta = f"Pago combinado #{i + 1}"
+        if not isinstance(p, dict):
+            return f"{etiqueta}: formato inválido", 0.0
+
+        codigo = p.get("codigo")
+        if codigo not in SUBMETODOS_COMBINABLES:
+            return f"{etiqueta}: método '{codigo}' no reconocido", 0.0
+
+        moneda = p.get("moneda") or ("USD" if codigo in ("ED", "PVC") else "BS")
+        if moneda not in ("USD", "BS"):
+            return f"{etiqueta}: moneda inválida", 0.0
+
+        monto_nativo = p.get("montoNativo", p.get("monto"))
+        try:
+            monto_nativo = float(monto_nativo)
+            if monto_nativo <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return f"{etiqueta}: monto inválido", 0.0
+
+        # Pago Móvil y Transferencia Bancaria requieren banco + referencia,
+        # igual que cuando se seleccionan como método de pago único.
+        if codigo in ("PM", "TRANSF"):
+            if not str(p.get("banco") or "").strip():
+                return f"{etiqueta}: falta el banco", 0.0
+            ref = str(p.get("referencia") or "").strip()
+            ref_min = 4 if codigo == "PM" else 1
+            if len(ref) < ref_min:
+                return f"{etiqueta}: falta el número de referencia", 0.0
+
+        for campo in ("banco", "referencia"):
+            valor = p.get(campo)
+            if valor and len(str(valor)) > LONGITUDES_MAXIMAS.get(campo, 40):
+                return f"{etiqueta}: el campo '{campo}' supera la longitud máxima permitida", 0.0
+
+        suma_usd += monto_nativo if moneda == "USD" else (monto_nativo / tasa if tasa else monto_nativo)
+
+    if suma_usd < (float(total_usd) - 0.01):
+        faltante = float(total_usd) - suma_usd
+        return (
+            f"El Pago Combinado ingresado (${suma_usd:.2f}) no cubre el total de la factura "
+            f"(${float(total_usd):.2f}). Faltan ${faltante:.2f}",
+            suma_usd,
+        )
+
+    return None, suma_usd
 
 
 class handler(BaseHTTPRequestHandler):
@@ -224,6 +296,28 @@ class handler(BaseHTTPRequestHandler):
                 subtotal_bs = round(subtotal_usd * tasa_cambio, 2)
                 descuento_bs = round(descuento_usd * tasa_cambio, 2)
 
+                # 5b. Validaciones específicas de Pago Combinado / Transferencia Bancaria.
+                #     Se hacen aquí (y no en el paso 3) porque necesitan total_usd y
+                #     tasa_cambio ya calculados para poder sumar las líneas y compararlas
+                #     contra el total real de la factura.
+                pagos_combinados = body_data.get("pagos_combinados") or []
+
+                if metodo_pago == "COMB":
+                    error_comb, _suma_cubierta = _validar_pagos_combinados(pagos_combinados, total_usd, tasa_cambio)
+                    if error_comb:
+                        self._responder(400, {"status": "error", "message": error_comb})
+                        return
+                elif metodo_pago == "TRANSF":
+                    if not str(body_data.get("banco") or "").strip() or body_data.get("banco") == "N/A":
+                        self._responder(400, {"status": "error", "message": "Para Transferencia Bancaria se requiere indicar el banco"})
+                        return
+                    if not str(body_data.get("referencia") or "").strip() or body_data.get("referencia") == "N/A":
+                        self._responder(400, {"status": "error", "message": "Para Transferencia Bancaria se requiere el número de referencia"})
+                        return
+                    pagos_combinados = []  # no aplica fuera de Pago Combinado
+                else:
+                    pagos_combinados = []  # no aplica a métodos que no son COMB
+
                 # 6. Armar la factura definitiva combinando lo fijo con lo editado.
                 p_factura = {
                     "id_factura": id_factura,
@@ -243,6 +337,10 @@ class handler(BaseHTTPRequestHandler):
                     "referencia": body_data.get("referencia", "N/A"),
                     "banco": body_data.get("banco", "N/A"),
                     "observaciones": body_data.get("observaciones", ""),
+                    # Detalle estructurado de cada línea del Pago Combinado (lista vacía
+                    # para el resto de métodos). Requiere la columna jsonb
+                    # `pagos_combinados` en la tabla `facturas` — ver supabase/pagos_combinados.sql.
+                    "pagos_combinados": pagos_combinados,
                 }
 
                 p_detalles = [

@@ -7,7 +7,11 @@ from requests.adapters import HTTPAdapter, Retry
 
 MAX_BYTES_SOLICITUD = 512 * 1024  # 512 KB
 MAX_PRODUCTOS_POR_FACTURA = 150
-METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "OTROS"}
+# TRANSF = Transferencia bancaria (standalone). COMB = Pago Combinado, cuyas
+# líneas individuales llegan en "pagos_combinados" (ver _validar_pagos_combinados).
+METODOS_PAGO_VALIDOS = {"PM", "PVD", "PVC", "ED", "EBS", "TRANSF", "COMB", "OTROS"}
+SUBMETODOS_COMBINABLES = {"PM", "TRANSF", "PVD", "PVC", "ED", "EBS"}
+MAX_LINEAS_PAGO_COMBINADO = 20
 
 ID_FACTURA_REGEX = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
 
@@ -59,6 +63,18 @@ def validar_factura(data):
     metodo_pago = data.get("metodo_pago")
     if metodo_pago is not None and metodo_pago not in METODOS_PAGO_VALIDOS:
         return f"Método de pago no reconocido: {metodo_pago}"
+
+    if metodo_pago == "COMB":
+        error_comb = _validar_pagos_combinados(
+            data.get("pagos_combinados"), data.get("total_usd"), data.get("tasa_cambio", 1.0)
+        )
+        if error_comb:
+            return error_comb
+    elif metodo_pago == "TRANSF":
+        if not str(data.get("banco") or "").strip():
+            return "Para Transferencia Bancaria se requiere indicar el banco"
+        if not str(data.get("referencia") or "").strip():
+            return "Para Transferencia Bancaria se requiere el número de referencia"
 
     productos = data.get("productos", [])
     if not isinstance(productos, list) or not productos:
@@ -118,6 +134,71 @@ def validar_factura(data):
                 return "La tasa de cambio debe ser mayor a cero"
         except (TypeError, ValueError):
             return "La tasa de cambio debe ser un número válido"
+
+    return None
+
+
+def _validar_pagos_combinados(pagos, total_usd, tasa_cambio):
+    """Misma validación que usa api/gestion-temporales.py para las líneas de
+    un Pago Combinado, replicada aquí porque este endpoint (creación directa
+    de factura definitiva) también acepta metodo_pago == 'COMB'."""
+    if not isinstance(pagos, list) or not pagos:
+        return "El Pago Combinado debe incluir al menos un método de pago"
+    if len(pagos) > MAX_LINEAS_PAGO_COMBINADO:
+        return f"El Pago Combinado no puede tener más de {MAX_LINEAS_PAGO_COMBINADO} líneas"
+
+    try:
+        tasa = float(tasa_cambio) if tasa_cambio else 1.0
+    except (TypeError, ValueError):
+        tasa = 1.0
+
+    suma_usd = 0.0
+    for i, p in enumerate(pagos):
+        etiqueta = f"Pago combinado #{i + 1}"
+        if not isinstance(p, dict):
+            return f"{etiqueta}: formato inválido"
+
+        codigo = p.get("codigo")
+        if codigo not in SUBMETODOS_COMBINABLES:
+            return f"{etiqueta}: método '{codigo}' no reconocido"
+
+        moneda = p.get("moneda") or ("USD" if codigo in ("ED", "PVC") else "BS")
+        if moneda not in ("USD", "BS"):
+            return f"{etiqueta}: moneda inválida"
+
+        try:
+            monto_nativo = float(p.get("montoNativo", p.get("monto")))
+            if monto_nativo <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return f"{etiqueta}: monto inválido"
+
+        if codigo in ("PM", "TRANSF"):
+            if not str(p.get("banco") or "").strip():
+                return f"{etiqueta}: falta el banco"
+            ref = str(p.get("referencia") or "").strip()
+            ref_min = 4 if codigo == "PM" else 1
+            if len(ref) < ref_min:
+                return f"{etiqueta}: falta el número de referencia"
+
+        for campo in ("banco", "referencia"):
+            valor = p.get(campo)
+            if valor and len(str(valor)) > LONGITUDES_MAXIMAS.get(campo, 40):
+                return f"{etiqueta}: el campo '{campo}' supera la longitud máxima permitida"
+
+        suma_usd += monto_nativo if moneda == "USD" else (monto_nativo / tasa if tasa else monto_nativo)
+
+    try:
+        total_usd_num = float(total_usd)
+    except (TypeError, ValueError):
+        total_usd_num = 0.0
+
+    if suma_usd < (total_usd_num - 0.01):
+        faltante = total_usd_num - suma_usd
+        return (
+            f"El Pago Combinado ingresado (${suma_usd:.2f}) no cubre el total de la factura "
+            f"(${total_usd_num:.2f}). Faltan ${faltante:.2f}"
+        )
 
     return None
 
@@ -195,6 +276,10 @@ class handler(BaseHTTPRequestHandler):
             "referencia": factura_data.get("referencia"),
             "banco": factura_data.get("banco"),
             "observaciones": factura_data.get("observaciones", ""),
+            # Detalle estructurado del Pago Combinado (lista vacía para el resto
+            # de métodos). Requiere la columna jsonb `pagos_combinados` en la
+            # tabla `facturas` — ver supabase/pagos_combinados.sql.
+            "pagos_combinados": factura_data.get("pagos_combinados") or [] if factura_data.get("metodo_pago") == "COMB" else [],
         }
 
         p_detalles = [
