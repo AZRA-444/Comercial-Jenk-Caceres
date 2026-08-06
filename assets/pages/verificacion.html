@@ -173,9 +173,47 @@
               </h2>
 
               <div class="ver-pago-form">
-                <label class="form-field">
-                  Método de pago
-                  <select id="verMetodoPago" onchange="verSelectMetodoPago(this.value)">
+                <div class="form-field">
+                  <span class="pago-method-caption">Método de pago</span>
+
+                  <!-- Selector visual de método de pago -->
+                  <div class="pago-method-grid" id="verPagoMethodGrid" role="radiogroup" aria-label="Método de pago">
+                    <button type="button" class="pago-method-btn" data-valor="PM" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-mobile-screen-button"></i>
+                      <span>Pago Móvil</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="PVD" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-credit-card"></i>
+                      <span>Pago V/D</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="PVC" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-credit-card"></i>
+                      <span>Pago V/C</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="ED" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-money-bill-wave"></i>
+                      <span>Efectivo $</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="EBS" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-money-bill-1-wave"></i>
+                      <span>Efectivo Bs</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="TRANSF" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-building-columns"></i>
+                      <span>Transferencia</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="COMB" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-layer-group"></i>
+                      <span>Combinado</span>
+                    </button>
+                    <button type="button" class="pago-method-btn" data-valor="OTROS" role="radio" aria-checked="false">
+                      <i class="fa-solid fa-ellipsis"></i>
+                      <span>Otros</span>
+                    </button>
+                  </div>
+
+                  <!-- Select nativo oculto: mantiene compatibilidad con la lógica existente (lee .value) -->
+                  <select id="verMetodoPago" class="sr-only-select" tabindex="-1" aria-hidden="true">
                     <option value="" disabled selected>Seleccione un método</option>
                     <option value="PM">Pago Móvil</option>
                     <option value="PVD">Pago V/D</option>
@@ -186,10 +224,15 @@
                     <option value="COMB">Pago Combinado</option>
                     <option value="OTROS">Otros</option>
                   </select>
-                </label>
+                </div>
 
                 <!-- Detalles dinámicos según método -->
-                <div id="verPaymentDetails" class="form-billing-grid" style="margin-top: 8px;"></div>
+                <div id="verPaymentDetails" class="form-billing-grid">
+                  <div class="pago-placeholder" id="verPagoPlaceholder">
+                    <i class="fa-regular fa-hand-pointer"></i>
+                    <p>Selecciona un método de pago arriba para continuar</p>
+                  </div>
+                </div>
               </div>
             </div>
 
