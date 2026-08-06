@@ -7,9 +7,11 @@ const NOMBRES_METODO = {
   PVC: "Punto Crédito",
   ED: "Efectivo Divisa",
   EBS: "Efectivo Bolívares",
+  TRANSF: "Transferencia Bancaria",
+  COMB: "Pago Combinado",
   OTROS: "Otros",
 };
-const ORDEN_METODOS = ["PM", "PVD", "PVC", "ED", "EBS", "OTROS"];
+const ORDEN_METODOS = ["PM", "PVD", "PVC", "ED", "EBS", "TRANSF", "COMB", "OTROS"];
 
 const headers = {
   apikey: SUPABASE_ANON_KEY,
@@ -542,6 +544,26 @@ async function verDetalleFacturaReporte(idFactura) {
     : "<p>Sin productos registrados en esta factura.</p>";
 
   if (body) {
+    // Si se pagó con "Pago Combinado", se muestra el desglose línea por
+    // línea guardado en factura.pagos_combinados (requiere haber ejecutado
+    // supabase/pagos_combinados.sql).
+    let pagosCombinadosHtml = "";
+    const pagosCombinados = Array.isArray(factura?.pagos_combinados) ? factura.pagos_combinados : [];
+    if (factura?.metodo_pago === "COMB" && pagosCombinados.length > 0) {
+      pagosCombinadosHtml = `
+        <h4 style="margin:14px 0 6px;">Desglose del pago combinado</h4>
+        ${pagosCombinados.map((p) => {
+          const monto = p.moneda === "USD"
+            ? fmtUSD(p.montoUSD ?? p.montoNativo ?? 0)
+            : `Bs ${fmtBS(p.montoBs ?? p.montoNativo ?? 0)}`;
+          const extra = [p.banco, p.referencia ? `Ref: ${p.referencia}` : ""].filter(Boolean).map(escapeHtml).join(" · ");
+          return `<div class="row">
+            <span>${escapeHtml(p.metodo || p.codigo || "Pago")}${extra ? " (" + extra + ")" : ""}</span>
+            <span class="num">${monto}</span>
+          </div>`;
+        }).join("")}`;
+    }
+
     body.innerHTML = `
       <div class="row"><span>Cliente</span><span>${escapeHtml(factura?.nombre)} ${escapeHtml(factura?.apellido)}</span></div>
       <div class="row"><span>Cédula</span><span>${escapeHtml(factura?.cedula)}</span></div>
@@ -551,6 +573,7 @@ async function verDetalleFacturaReporte(idFactura) {
       <div class="row"><span>Referencia</span><span>${escapeHtml(factura?.referencia) || "N/A"}</span></div>
       <div class="row"><span>Banco</span><span>${escapeHtml(factura?.banco) || "N/A"}</span></div>
       <div class="row"><span>Observaciones</span><span>${escapeHtml(factura?.observaciones) || "N/A"}</span></div>
+      ${pagosCombinadosHtml}
       <h4 style="margin:14px 0 6px;">Productos</h4>
       ${productosHtml}
       <div class="row" style="border-top:2px solid var(--ink); margin-top:8px; font-weight:700;">
@@ -571,6 +594,28 @@ async function reimprimirFactura(idFactura) {
       <td class="der">$${(Number(p.precio_total) || 0).toFixed(2)}</td>
     </tr>`).join("");
 
+  // Desglose del pago combinado (si aplica), en el mismo formato que usa
+  // js/verificacion.js al imprimir la nota original.
+  const pagosCombinados = Array.isArray(factura.pagos_combinados) ? factura.pagos_combinados : [];
+  let bloquePagoHtml = "";
+  if (factura.metodo_pago === "COMB" && pagosCombinados.length > 0) {
+    const renglones = pagosCombinados.map((p) => {
+      const monto = p.moneda === "USD"
+        ? `$${Number(p.montoUSD ?? p.montoNativo ?? 0).toFixed(2)}`
+        : `Bs ${Number(p.montoBs ?? p.montoNativo ?? 0).toFixed(2)}`;
+      const extra = [p.banco, p.referencia ? `Ref: ${p.referencia}` : ""].filter(Boolean).map(escapeHtml).join(" - ");
+      return `<p style="margin:2px 0 2px 8px; font-size:0.9em;">• <strong>${escapeHtml(p.metodo || p.codigo || "Pago")}:</strong> ${monto}${extra ? ` (${extra})` : ""}</p>`;
+    }).join("");
+    bloquePagoHtml = `
+      <p><strong>Método de pago:</strong> Pago Combinado</p>
+      ${renglones}`;
+  } else {
+    bloquePagoHtml = `
+      <p><strong>Método de pago:</strong> ${escapeHtml(nombreMetodo(factura.metodo_pago))}</p>
+      ${factura.banco ? `<p><strong>Banco:</strong> ${escapeHtml(factura.banco)}</p>` : ""}
+      ${factura.referencia ? `<p><strong>Referencia:</strong> ${escapeHtml(factura.referencia)}</p>` : ""}`;
+  }
+
   const contenido = `
     <div class="doc">
       <div class="doc-header">
@@ -584,9 +629,7 @@ async function reimprimirFactura(idFactura) {
         <p><strong>Cédula:</strong> ${escapeHtml(factura.cedula || "N/A")}</p>
         <p><strong>Teléfono:</strong> ${escapeHtml(factura.telefono || "N/A")}</p>
         <p><strong>Vendedor:</strong> ${escapeHtml(factura.vendedor || "N/A")}</p>
-        <p><strong>Método de pago:</strong> ${escapeHtml(nombreMetodo(factura.metodo_pago))}</p>
-        ${factura.banco ? `<p><strong>Banco:</strong> ${escapeHtml(factura.banco)}</p>` : ""}
-        ${factura.referencia ? `<p><strong>Referencia:</strong> ${escapeHtml(factura.referencia)}</p>` : ""}
+        ${bloquePagoHtml}
       </div>
       <table class="doc-tabla">
         <thead><tr><th>Cant</th><th>Producto</th><th class="der">Total $</th></tr></thead>

@@ -12,6 +12,30 @@ const verState = {
   descuentoUSD: 0,
   totalUSD:     0,
   totalBS:      0,
+  combPagos:    [],   // líneas de pago del Pago Combinado (ver sección 6)
+};
+
+// ---------------------------------------------------------------------------
+// Catálogo de bancos y de métodos combinables (usado por PM, TRANSF y COMB)
+// ---------------------------------------------------------------------------
+const BANCOS_VE = [
+  'Banesco', 'Banco de Venezuela', 'Provincial', 'Banplus'
+];
+
+function _bancosOptionsHtml(seleccionado = '') {
+  return `<option value="" disabled ${seleccionado ? '' : 'selected'}>Seleccione un banco</option>` +
+    BANCOS_VE.map(b => `<option value="${b}" ${b === seleccionado ? 'selected' : ''}>${b}</option>`).join('');
+}
+
+// Métodos que se pueden combinar dentro de "Pago Combinado". Cada línea
+// agregada por el verificador queda guardada en verState.combPagos con esta
+// forma: { id, codigo, moneda: 'USD'|'BS', monto, banco, referencia }
+const COMB_METODOS = {
+  PM:     { label: 'Pago Móvil',              moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 4 },
+  TRANSF: { label: 'Transferencia Bancaria',  moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 1 },
+  PVD:    { label: 'Punto de Venta (Bs)',     moneda: 'BS',  requiereBanco: false, requiereRef: false },
+  ED:     { label: 'Efectivo ($)',            moneda: 'USD', requiereBanco: false, requiereRef: false },
+  EBS:    { label: 'Efectivo (Bs)',           moneda: 'BS',  requiereBanco: false, requiereRef: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -43,7 +67,50 @@ document.addEventListener('DOMContentLoaded', () => {
   // Delegación de eventos para los botones de la tabla
   document.getElementById('tablaVerificacionProductos')
     .addEventListener('click', _manejarClickTabla);
+
+  // Selector visual de método de pago (grilla de botones)
+  document.getElementById('verPagoMethodGrid')
+    .addEventListener('click', (e) => {
+      const btn = e.target.closest('.pago-method-btn');
+      if (!btn) return;
+      verSeleccionarMetodoPago(btn.dataset.valor);
+    });
 });
+
+/** Marca visualmente el método elegido, sincroniza el select oculto y
+ *  dispara el render de los campos dinámicos correspondientes. */
+function verSeleccionarMetodoPago(valor) {
+  document.querySelectorAll('.pago-method-btn').forEach(btn => {
+    const activo = btn.dataset.valor === valor;
+    btn.classList.toggle('active', activo);
+    btn.setAttribute('aria-checked', String(activo));
+  });
+
+  const select = document.getElementById('verMetodoPago');
+  if (select) select.value = valor;
+
+  verSelectMetodoPago(valor);
+}
+
+/** Vuelve la sección de pago a su estado inicial (sin método elegido). */
+function _resetSeccionPago() {
+  document.querySelectorAll('.pago-method-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.setAttribute('aria-checked', 'false');
+  });
+
+  const select = document.getElementById('verMetodoPago');
+  if (select) select.value = '';
+
+  const container = document.getElementById('verPaymentDetails');
+  if (container) {
+    container.innerHTML = `
+      <div class="pago-placeholder" id="verPagoPlaceholder">
+        <i class="fa-regular fa-hand-pointer"></i>
+        <p>Selecciona un método de pago arriba para continuar</p>
+      </div>`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 1. Carga de facturas pendientes
@@ -129,6 +196,7 @@ function seleccionarFactura(index) {
   // Construir estado editable de productos
   const detalles   = factura.detalles_factura_temporal || [];
   verState.tasaCambio = factura.tasa_cambio || 1;
+  verState.combPagos  = []; // reinicia las líneas de pago combinado de la factura anterior
 
   verState.productos = detalles.map(p => ({
     nombre:            p.nombre_producto,
@@ -144,6 +212,9 @@ function seleccionarFactura(index) {
 
   // Limpiar formulario de agregar producto
   _limpiarFormAgregar();
+
+  // Reiniciar la sección de pago (método elegido en la factura anterior no debe arrastrarse)
+  _resetSeccionPago();
 
   // Renderizar tabla y totales
   verActualizarTabla();
@@ -381,6 +452,7 @@ function verActualizarTabla() {
   const metodo = document.getElementById('verMetodoPago')?.value;
   if (metodo) {
     _actualizarMontoPago(metodo, totalUSD, totalBS);
+    if (metodo === 'COMB') _verCombRefrescarResumen();
   }
 }
 
@@ -397,33 +469,42 @@ function verSelectMetodoPago(valor) {
   const totalBS  = verState.totalBS;
 
   const montoHeader = `
-    <div style="grid-column: 1 / -1; background: var(--accent-soft); border: 1px solid rgba(56,189,248,.25);
-                border-radius: 10px; padding: 14px 16px; margin-bottom: 4px;">
-      <p style="color: var(--text-secondary); font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;">
-        Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'PVC' ? 'transferir' : 'pagar'}:
-      </p>
-      <p class="ver-monto-display" style="color: var(--accent); font-size: 1.4rem; font-weight: 700; margin:0;">
-        $${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>
-      </p>
+    <div class="ver-monto-box">
+      <span class="ver-monto-box-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+      <div class="ver-monto-box-text">
+        <p class="ver-monto-box-label">
+          Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'TRANSF' ? 'transferir' : 'pagar'}
+        </p>
+        <p class="ver-monto-display">
+          $${totalUSD.toFixed(2)} <span>/ Bs ${totalBS.toFixed(2)}</span>
+        </p>
+      </div>
     </div>`;
 
   if (valor === 'PM') {
     container.innerHTML = `
       ${montoHeader}
       <label class="form-field">Banco Destino
-        <select id="verBankSelect">
-          <option value="" disabled selected>Seleccione un banco</option>
-          <option value="Banesco">Banesco</option>
-          <option value="Venezuela">Banco de Venezuela</option>
-          <option value="Provincial">Provincial</option>
-          <option value="Banplus">Banplus</option>
-        </select>
+        <select id="verBankSelect">${_bancosOptionsHtml()}</select>
       </label>
       <label class="form-field">Número de Referencia
         <input type="number" id="verPmRef" placeholder="Últimos 4 dígitos" />
       </label>`;
 
-  } else if (valor === 'PVD' || valor === 'PVC') {
+  } else if (valor === 'TRANSF') {
+    container.innerHTML = `
+      ${montoHeader}
+      <label class="form-field">Banco
+        <select id="verTransfBanco">${_bancosOptionsHtml()}</select>
+      </label>
+      <label class="form-field">Titular de la cuenta origen (opcional)
+        <input type="text" id="verTransfTitular" placeholder="Nombre del titular" />
+      </label>
+      <label class="form-field">Número de Referencia / Operación
+        <input type="text" id="verTransfRef" placeholder="Nº de operación" />
+      </label>`;
+
+  } else if (valor === 'PVD') {
     container.innerHTML = montoHeader;
 
   } else if (valor === 'ED') {
@@ -477,155 +558,59 @@ function verSelectMetodoPago(valor) {
     }, 0);
 
 } else if (valor === 'COMB') {
-    
-    // Calculamos la tasa implícita para poder convertir $ y Bs en tiempo real
-    const tasa = totalUSD > 0 ? (totalBS / totalUSD) : 1;
+
+    // El Pago Combinado es una lista de líneas (verState.combPagos) que se
+    // construye de a un pago a la vez con el mini-formulario "Añadir pago".
+    // Esto permite, por ejemplo, dos Pagos Móviles de teléfonos distintos,
+    // un Efectivo ($) y una Transferencia Bancaria, todo en la misma venta.
+    verState.combPagos = [];
 
     container.innerHTML = `
       ${montoHeader}
-      <div style="grid-column: 1 / -1; margin-bottom: 10px;">
-        <label class="form-field" style="margin-bottom: 8px;">Métodos a combinar:</label>
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; padding: 5px 0;">
-          <label><input type="checkbox" class="mix-method-chk" value="PM"> Pago Móvil</label>
-          <label><input type="checkbox" class="mix-method-chk" value="ED"> Efectivo ($)</label>
-          <label><input type="checkbox" class="mix-method-chk" value="EBS"> Efectivo (Bs)</label>
-          <label><input type="checkbox" class="mix-method-chk" value="PVD"> Punto de Venta</label>
+      <div class="comb-builder">
+        <div class="comb-add-row">
+          <label class="form-field">Método a añadir
+            <select id="combMetodoNuevo">
+              ${Object.entries(COMB_METODOS).map(([cod, def]) => `<option value="${cod}">${def.label}</option>`).join('')}
+            </select>
+          </label>
+          <div id="combCamposDinamicos" class="comb-campos-dinamicos"></div>
+          <button type="button" class="btn-secondary comb-btn-add" id="btnCombAgregar">
+            <i class="fas fa-plus"></i> Añadir pago
+          </button>
         </div>
-      </div>
-      
-      <!-- Contenedor donde aparecerán los inputs dinámicamente -->
-      <div id="verCombDetails" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px;"></div>
-      
-      <!-- Resumen en tiempo real -->
-      <div id="verCombSummary" style="grid-column: 1 / -1; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); padding: 12px; border-radius: 8px; margin-top: 10px; display: none;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-          <span style="color: var(--text-secondary); font-size: 0.9rem;">Total ingresado:</span>
-          <strong>$<span id="verCombTotal">0.00</span> <span style="font-size:0.85rem; font-weight:normal; color:var(--text-secondary);">/ Bs <span id="verCombTotalBS">0.00</span></span></strong>
+
+        <div class="table-responsive comb-tabla-wrap">
+          <table class="comb-tabla">
+            <thead><tr><th>Método</th><th>Monto</th><th>Detalle</th><th></th></tr></thead>
+            <tbody id="combTablaBody">
+              <tr><td colspan="4" class="table-empty">Aún no se ha agregado ningún pago.</td></tr>
+            </tbody>
+          </table>
         </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span style="color: var(--text-secondary); font-size: 0.9rem;">Resta por pagar:</span>
-          <strong style="color: #ef4444;" id="verCombRestanteContainer">
-            $<span id="verCombRestante">${totalUSD.toFixed(2)}</span> 
-            <span style="font-size:0.85rem; font-weight:normal;">/ Bs <span id="verCombRestanteBS">${totalBS.toFixed(2)}</span></span>
-          </strong>
+
+        <div id="verCombSummary" class="comb-summary">
+          <div class="total-row">
+            <span>Total ingresado</span>
+            <strong>$<span id="verCombTotal">0.00</span>
+              <span class="comb-sub">/ Bs <span id="verCombTotalBS">0.00</span></span>
+            </strong>
+          </div>
+          <div class="total-row">
+            <span>Resta por cubrir</span>
+            <strong id="verCombRestanteContainer" class="comb-restante">
+              $<span id="verCombRestante">${totalUSD.toFixed(2)}</span>
+              <span class="comb-sub">/ Bs <span id="verCombRestanteBS">${totalBS.toFixed(2)}</span></span>
+            </strong>
+          </div>
+          <div class="total-row hidden" id="verCombVueltoRow">
+            <span>Vuelto a entregar (efectivo)</span>
+            <strong id="verCombVuelto" style="color: var(--success);">$0.00</strong>
+          </div>
         </div>
       </div>`;
 
-    setTimeout(() => {
-      const checkboxes = container.querySelectorAll('.mix-method-chk');
-      const detailsContainer = document.getElementById('verCombDetails');
-      const summaryContainer = document.getElementById('verCombSummary');
-      
-      const spanTotal = document.getElementById('verCombTotal');
-      const spanTotalBS = document.getElementById('verCombTotalBS');
-      const spanRestante = document.getElementById('verCombRestante');
-      const spanRestanteBS = document.getElementById('verCombRestanteBS');
-      const restanteContainer = document.getElementById('verCombRestanteContainer');
-
-      // Función que suma los montos para mostrar el restante en $ y Bs
-      const recalcularTotales = () => {
-        let sumaUSD = 0;
-
-        // Sumar montos ingresados en dólares (clase .input-usd)
-        document.querySelectorAll('.input-usd').forEach(input => {
-          sumaUSD += Number(input.value) || 0;
-        });
-
-        // Sumar montos ingresados en bolívares (clase .input-bs) y convertirlos a dólares
-        document.querySelectorAll('.input-bs').forEach(input => {
-          const montoBs = Number(input.value) || 0;
-          sumaUSD += (montoBs / tasa);
-        });
-
-        const restanteUSD = verState.totalUSD - sumaUSD;
-        const sumaBS = sumaUSD * tasa;
-        const restanteBS = restanteUSD * tasa;
-
-        // Actualizar totales ingresados
-        spanTotal.textContent = sumaUSD.toFixed(2);
-        spanTotalBS.textContent = sumaBS.toFixed(2);
-
-        // Actualizar restantes por pagar
-        spanRestante.textContent = restanteUSD > 0 ? restanteUSD.toFixed(2) : '0.00';
-        spanRestanteBS.textContent = restanteBS > 0 ? restanteBS.toFixed(2) : '0.00';
-
-        // Cambiar color a verde si ya se cubrió el monto total
-        if (restanteContainer) {
-          restanteContainer.style.color = restanteUSD <= 0.01 ? '#10b981' : '#ef4444';
-        }
-      };
-
-      // Función que renderiza los campos según los checkboxes marcados
-      const renderCombFields = () => {
-        let html = '';
-        let hasSelection = false;
-
-        checkboxes.forEach(chk => {
-          if (chk.checked) {
-            hasSelection = true;
-            const method = chk.value;
-            const title = chk.parentElement.textContent.trim();
-
-            html += `
-              <div style="border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 12px; background: #fff;">
-                <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: var(--accent);">${title}</h4>
-                <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">`;
-
-            if (method === 'PM') {
-              html += `
-                <label class="form-field">Monto (Bs)
-                  <input type="number" step="0.01" class="comb-monto input-bs" name="comb_pm_monto" placeholder="Monto Bs" />
-                </label>
-                <label class="form-field">Banco
-                  <select name="comb_pm_banco">
-                    <option value="" disabled selected>Seleccione</option>
-                    <option value="Banesco">Banesco</option>
-                    <option value="Venezuela">Venezuela</option>
-                    <option value="Provincial">Provincial</option>
-                    <option value="Banplus">Banplus</option>
-                    <option value="BNC">BNC</option>
-                  </select>
-                </label>
-                <label class="form-field">Referencia
-                  <input type="number" name="comb_pm_ref" placeholder="Últimos 4" />
-                </label>`;
-            } else if (method === 'ED') {
-              html += `
-                <label class="form-field">Monto ($)
-                  <input type="number" step="0.01" class="comb-monto input-usd" name="comb_ed_monto" placeholder="Monto USD" />
-                </label>`;
-            } else if (method === 'EBS') {
-              html += `
-                <label class="form-field">Monto (Bs)
-                  <input type="number" step="0.01" class="comb-monto input-bs" name="comb_ebs_monto" placeholder="Monto Bs" />
-                </label>`;
-            } else if (method === 'PVD') {
-              html += `
-                <label class="form-field">Monto (Bs)
-                  <input type="number" step="0.01" class="comb-monto input-bs" name="comb_pvd_monto" placeholder="Monto Bs" />
-                </label>`;
-            }
-            html += `</div></div>`;
-          }
-        });
-
-        detailsContainer.innerHTML = html;
-        summaryContainer.style.display = hasSelection ? 'block' : 'none';
-
-        // Reasignamos el evento para recalcular automáticamente cuando se escriba un monto
-        detailsContainer.querySelectorAll('.comb-monto').forEach(input => {
-          input.addEventListener('input', recalcularTotales);
-        });
-        
-        recalcularTotales();
-      };
-
-      // Escuchamos el cambio en los checkboxes para dibujar la interfaz
-      checkboxes.forEach(chk => {
-        chk.addEventListener('change', renderCombFields);
-      });
-
-    }, 0);
+    setTimeout(_initCombBuilder, 0);
 
   } else if (valor === 'OTROS') {
     container.innerHTML = `
@@ -640,7 +625,204 @@ function verSelectMetodoPago(valor) {
 function _actualizarMontoPago(metodo, totalUSD, totalBS) {
   const el = document.querySelector('.ver-monto-display');
   if (!el) return;
-  el.innerHTML = `$${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>`;
+  el.innerHTML = `$${totalUSD.toFixed(2)} <span>/ Bs ${totalBS.toFixed(2)}</span>`;
+}
+
+// ---------------------------------------------------------------------------
+// 6b. Constructor de Pago Combinado (varias líneas de pago, cualquier mezcla
+//     y repeticiones del mismo método: ej. 2 Pagos Móviles + 1 Transferencia)
+// ---------------------------------------------------------------------------
+
+/** Monto de una línea de pago combinado expresado en USD, según su moneda nativa */
+function _verCombMontoUSD(pago) {
+  const tasa = Number(verState.tasaCambio) || 1;
+  return pago.moneda === 'USD' ? pago.monto : (pago.monto / tasa);
+}
+
+/** Monto de una línea de pago combinado expresado en Bs, según su moneda nativa */
+function _verCombMontoBS(pago) {
+  const tasa = Number(verState.tasaCambio) || 1;
+  return pago.moneda === 'USD' ? (pago.monto * tasa) : pago.monto;
+}
+
+/** Renderiza en #combCamposDinamicos los campos que pide el método elegido */
+function _renderCombCamposDinamicos() {
+  const select = document.getElementById('combMetodoNuevo');
+  const cont   = document.getElementById('combCamposDinamicos');
+  if (!select || !cont) return;
+
+  const codigo = select.value;
+  const def    = COMB_METODOS[codigo];
+  if (!def) { cont.innerHTML = ''; return; }
+
+  let html = '';
+
+  const unidad = def.moneda === 'USD' ? ' ($)' : ' (Bs)';
+  html += `
+    <label class="form-field">Monto${unidad}
+      <input type="number" id="combMontoNuevo" step="0.01" min="0.01" placeholder="0.00" />
+    </label>`;
+
+  if (def.requiereBanco) {
+    html += `
+      <label class="form-field">Banco
+        <select id="combBancoNuevo">${_bancosOptionsHtml()}</select>
+      </label>`;
+  }
+  if (def.requiereRef) {
+    html += `
+      <label class="form-field">Referencia
+        <input type="text" id="combRefNuevo" placeholder="${codigo === 'PM' ? 'Últimos 4 dígitos' : 'Nº de referencia'}" />
+      </label>`;
+  }
+
+  cont.innerHTML = html;
+}
+
+/** Lee el mini-formulario "Añadir pago", valida y agrega la línea a verState.combPagos */
+function _combAgregarPago() {
+  const select = document.getElementById('combMetodoNuevo');
+  const codigo = select?.value;
+  const def    = COMB_METODOS[codigo];
+  if (!def) return;
+
+  const montoInput = document.getElementById('combMontoNuevo');
+  const monto = Number(montoInput?.value);
+  if (!monto || monto <= 0) {
+    alert(`Ingresa un monto válido para ${def.label}.`);
+    return;
+  }
+
+  const moneda = def.moneda;
+
+  let banco = '';
+  if (def.requiereBanco) {
+    banco = document.getElementById('combBancoNuevo')?.value || '';
+    if (!banco) {
+      alert(`Selecciona el banco para ${def.label}.`);
+      return;
+    }
+  }
+
+  let referencia = '';
+  if (def.requiereRef) {
+    referencia = document.getElementById('combRefNuevo')?.value.trim() || '';
+    if (!referencia || referencia.length < (def.refMin || 1)) {
+      alert(`Ingresa un número de referencia válido para ${def.label}.`);
+      return;
+    }
+  }
+
+  verState.combPagos.push({
+    id: 'p' + Date.now() + Math.random().toString(16).slice(2),
+    codigo, moneda, monto, banco, referencia,
+  });
+
+  // Limpia solo monto/banco/referencia; deja el método elegido para poder
+  // agregar rápidamente varios pagos del mismo tipo (ej. 2 Pagos Móviles).
+  if (montoInput) montoInput.value = '';
+  const bancoInput = document.getElementById('combBancoNuevo');
+  if (bancoInput) bancoInput.value = '';
+  const refInput = document.getElementById('combRefNuevo');
+  if (refInput) refInput.value = '';
+
+  _verCombRenderTabla();
+  _verCombRefrescarResumen();
+}
+
+/** Dibuja la tabla con las líneas de pago ya agregadas */
+function _verCombRenderTabla() {
+  const tbody = document.getElementById('combTablaBody');
+  if (!tbody) return;
+
+  const filas = verState.combPagos || [];
+  if (filas.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" class="table-empty">Aún no se ha agregado ningún pago.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filas.map(p => {
+    const def = COMB_METODOS[p.codigo] || { label: p.codigo };
+    const montoTxt = p.moneda === 'USD' ? `$${p.monto.toFixed(2)}` : `Bs ${p.monto.toFixed(2)}`;
+    const detalle = [p.banco, p.referencia ? `Ref: ${p.referencia}` : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    return `
+      <tr>
+        <td>${escapeHtml(def.label)}</td>
+        <td>${montoTxt}</td>
+        <td>${detalle || '—'}</td>
+        <td class="acciones-producto">
+          <button type="button" class="btn-eliminar comb-btn-eliminar" data-id="${p.id}" title="Quitar este pago">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+/** Recalcula y muestra el total ingresado, el restante y el vuelto (si aplica) */
+function _verCombRefrescarResumen() {
+  const spanTotal = document.getElementById('verCombTotal');
+  if (!spanTotal) return; // el bloque COMB no está montado (otro método activo)
+
+  const tasa = Number(verState.tasaCambio) || 1;
+  const pagos = verState.combPagos || [];
+
+  const sumaUSD    = pagos.reduce((acc, p) => acc + _verCombMontoUSD(p), 0);
+  const sumaBS     = sumaUSD * tasa;
+  const restanteUSD = verState.totalUSD - sumaUSD;
+  const restanteBS  = restanteUSD * tasa;
+
+  spanTotal.textContent = sumaUSD.toFixed(2);
+  document.getElementById('verCombTotalBS').textContent = sumaBS.toFixed(2);
+  document.getElementById('verCombRestante').textContent = restanteUSD > 0 ? restanteUSD.toFixed(2) : '0.00';
+  document.getElementById('verCombRestanteBS').textContent = restanteBS > 0 ? restanteBS.toFixed(2) : '0.00';
+
+  const restanteContainer = document.getElementById('verCombRestanteContainer');
+  if (restanteContainer) {
+    restanteContainer.classList.toggle('cubierto', restanteUSD <= 0.01);
+  }
+
+  // Vuelto: solo si hay excedente y ese excedente puede cubrirse con lo
+  // recibido en efectivo (de una transferencia o pago móvil no se puede
+  // "dar vuelto", así que no se ofrece cambio sobre esos montos).
+  const vueltoRow  = document.getElementById('verCombVueltoRow');
+  const vueltoSpan = document.getElementById('verCombVuelto');
+  const efectivoUSD = pagos
+    .filter(p => p.codigo === 'ED' || p.codigo === 'EBS')
+    .reduce((acc, p) => acc + _verCombMontoUSD(p), 0);
+
+  const excedenteUSD = sumaUSD - verState.totalUSD;
+  if (excedenteUSD > 0.01 && efectivoUSD > 0 && vueltoRow && vueltoSpan) {
+    const vuelto = Math.min(excedenteUSD, efectivoUSD);
+    vueltoSpan.textContent = `$${vuelto.toFixed(2)}`;
+    vueltoRow.classList.remove('hidden');
+  } else if (vueltoRow) {
+    vueltoRow.classList.add('hidden');
+  }
+}
+
+/** Inicializa listeners del bloque COMB (se llama tras insertar su HTML) */
+function _initCombBuilder() {
+  const select = document.getElementById('combMetodoNuevo');
+  const btnAdd = document.getElementById('btnCombAgregar');
+  const tbody  = document.getElementById('combTablaBody');
+  if (!select || !btnAdd || !tbody) return;
+
+  _renderCombCamposDinamicos();
+  select.addEventListener('change', _renderCombCamposDinamicos);
+  btnAdd.addEventListener('click', _combAgregarPago);
+
+  tbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.comb-btn-eliminar');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    verState.combPagos = (verState.combPagos || []).filter(p => p.id !== id);
+    _verCombRenderTabla();
+    _verCombRefrescarResumen();
+  });
+
+  _verCombRenderTabla();
+  _verCombRefrescarResumen();
 }
 
 // ---------------------------------------------------------------------------
@@ -684,78 +866,34 @@ function _validarPago() {
     }
   }
 
+  if (metodo === 'TRANSF') {
+    const banco = document.getElementById('verTransfBanco')?.value;
+    const ref   = document.getElementById('verTransfRef')?.value.trim();
+
+    if (!banco) {
+      alert('Para Transferencia Bancaria, selecciona el Banco.');
+      return false;
+    }
+    if (!ref) {
+      alert('Para Transferencia Bancaria, ingresa el Número de Referencia / Operación.');
+      return false;
+    }
+  }
+
   if (metodo === 'COMB') {
-    const checkboxes = document.querySelectorAll('.mix-method-chk:checked');
-    
-    if (checkboxes.length === 0) {
-      alert('Para Pago Combinado, selecciona al menos un método de pago.');
+    const pagos = verState.combPagos || [];
+
+    if (pagos.length === 0) {
+      alert('Para Pago Combinado, agrega al menos un pago con el formulario "Añadir pago".');
       return false;
     }
 
-    const tasa = verState.totalUSD > 0 ? (verState.totalBS / verState.totalUSD) : 1;
-    let sumaUSD = 0;
-
-    for (const chk of checkboxes) {
-      const val = chk.value;
-
-      if (val === 'PM') {
-        const monto = Number(document.querySelector('input[name="comb_pm_monto"]')?.value) || 0;
-        const banco = document.querySelector('select[name="comb_pm_banco"]')?.value;
-        const ref   = document.querySelector('input[name="comb_pm_ref"]')?.value.trim();
-
-        if (monto <= 0) {
-          alert('Ingresa un monto válido para Pago Móvil.');
-          return false;
-        }
-        if (!banco) {
-          alert('Selecciona un Banco Destino para Pago Móvil.');
-          return false;
-        }
-        if (!ref || ref.length < 4) {
-          alert('Ingresa el Número de Referencia para Pago Móvil (mínimo 4 dígitos).');
-          return false;
-        }
-        sumaUSD += (monto / tasa);
-      }
-
-      if (val === 'ED') {
-        const monto = Number(document.querySelector('input[name="comb_ed_monto"]')?.value) || 0;
-        if (monto <= 0) {
-          alert('Ingresa un monto válido para Efectivo ($).');
-          return false;
-        }
-        sumaUSD += monto;
-      }
-
-      if (val === 'EBS') {
-        const monto = Number(document.querySelector('input[name="comb_ebs_monto"]')?.value) || 0;
-        if (monto <= 0) {
-          alert('Ingresa un monto válido para Efectivo (Bs).');
-          return false;
-        }
-        sumaUSD += (monto / tasa);
-      }
-
-      if (val === 'PVD') {
-        const monto = Number(document.querySelector('input[name="comb_pvd_monto"]')?.value) || 0;
-        const ref   = document.querySelector('input[name="comb_pvd_ref"]')?.value.trim();
-
-        if (monto <= 0) {
-          alert('Ingresa un monto válido para Punto de Venta.');
-          return false;
-        }
-        if (!ref) {
-          alert('Ingresa el Número de Referencia para el Punto de Venta.');
-          return false;
-        }
-        sumaUSD += (monto / tasa);
-      }
-    }
+    const sumaUSD = pagos.reduce((acc, p) => acc + _verCombMontoUSD(p), 0);
 
     // Verificación final del monto cubierto (tolerancia de $0.01 por redondeo decimal)
     if (sumaUSD < (verState.totalUSD - 0.01)) {
       const faltante = verState.totalUSD - sumaUSD;
-      alert(`El pago total ingresado ($${sumaUSD.toFixed(2)}) no cubre la compra. Faltan $${faltante.toFixed(2)}.`);
+      alert(`El pago combinado ingresado ($${sumaUSD.toFixed(2)}) no cubre la compra. Faltan $${faltante.toFixed(2)}.`);
       return false;
     }
   }
@@ -791,56 +929,43 @@ async function aprobarFacturaActual() {
   mostrarCargando(true);
 
   const metodo = document.getElementById('verMetodoPago')?.value || 'OTROS';
-  const obs =
-    document.getElementById('verObsOTROS')?.value.trim() ||
-    document.getElementById('verObsED')?.value.trim()    || '';
 
   // Variables para recopilar la información del pago
   let banco = 'N/A';
   let referencia = 'N/A';
+  let obsExtra = '';
   let pagosCombinados = [];
   let metodoPagoTexto = formatMetodoPago ? formatMetodoPago(metodo) : metodo;
 
   // Lógica de extracción según el método seleccionado
   if (metodo === 'COMB') {
-    const checkboxes = document.querySelectorAll('.mix-method-chk:checked');
     const bancosList = [];
     const refsList = [];
     const detallesTexto = [];
 
-    checkboxes.forEach(chk => {
-      const val = chk.value;
+    pagosCombinados = (verState.combPagos || []).map(p => {
+      const def = COMB_METODOS[p.codigo] || { label: p.codigo };
+      const montoUSD = _verCombMontoUSD(p);
+      const montoBs  = _verCombMontoBS(p);
 
-      if (val === 'PM') {
-        const montoBs = Number(document.querySelector('input[name="comb_pm_monto"]')?.value) || 0;
-        const bank    = document.querySelector('select[name="comb_pm_banco"]')?.value || '';
-        const ref     = document.querySelector('input[name="comb_pm_ref"]')?.value.trim() || '';
+      if (p.banco) bancosList.push(`${def.label}: ${p.banco}`);
+      if (p.referencia) refsList.push(`${def.label}: ${p.referencia}`);
 
-        pagosCombinados.push({ metodo: 'Pago Móvil', codigo: 'PM', montoBs, banco: bank, referencia: ref });
-        if (bank) bancosList.push(`PM: ${bank}`);
-        if (ref) refsList.push(`PM: ${ref}`);
-        detallesTexto.push(`Pago Móvil (${bank}): Bs ${montoBs.toFixed(2)} - Ref: ${ref}`);
+      const montoTexto = p.moneda === 'USD' ? `$${p.monto.toFixed(2)}` : `Bs ${p.monto.toFixed(2)}`;
+      detallesTexto.push(
+        `${def.label}${p.banco ? ' (' + p.banco + ')' : ''}: ${montoTexto}${p.referencia ? ' - Ref: ' + p.referencia : ''}`
+      );
 
-      } else if (val === 'ED') {
-        const montoUSD = Number(document.querySelector('input[name="comb_ed_monto"]')?.value) || 0;
-
-        pagosCombinados.push({ metodo: 'Efectivo ($)', codigo: 'ED', montoUSD });
-        detallesTexto.push(`Efectivo ($): $${montoUSD.toFixed(2)}`);
-
-      } else if (val === 'EBS') {
-        const montoBs = Number(document.querySelector('input[name="comb_ebs_monto"]')?.value) || 0;
-
-        pagosCombinados.push({ metodo: 'Efectivo (Bs)', codigo: 'EBS', montoBs });
-        detallesTexto.push(`Efectivo (Bs): Bs ${montoBs.toFixed(2)}`);
-
-      } else if (val === 'PVD') {
-        const montoBs = Number(document.querySelector('input[name="comb_pvd_monto"]')?.value) || 0;
-        const ref     = document.querySelector('input[name="comb_pvd_ref"]')?.value.trim() || '';
-
-        pagosCombinados.push({ metodo: 'Punto de Venta', codigo: 'PVD', montoBs, referencia: ref });
-        if (ref) refsList.push(`Punto: ${ref}`);
-        detallesTexto.push(`Punto de Venta: Bs ${montoBs.toFixed(2)} - Ref: ${ref}`);
-      }
+      return {
+        metodo: def.label,
+        codigo: p.codigo,
+        moneda: p.moneda,
+        montoNativo: p.monto,
+        montoUSD,
+        montoBs,
+        banco: p.banco || '',
+        referencia: p.referencia || '',
+      };
     });
 
     banco = bancosList.length > 0 ? bancosList.join(' | ') : 'N/A';
@@ -850,7 +975,19 @@ async function aprobarFacturaActual() {
   } else if (metodo === 'PM') {
     banco = document.getElementById('verBankSelect')?.value || 'N/A';
     referencia = document.getElementById('verPmRef')?.value?.trim() || 'N/A';
+
+  } else if (metodo === 'TRANSF') {
+    const titular = document.getElementById('verTransfTitular')?.value?.trim();
+    banco = document.getElementById('verTransfBanco')?.value || 'N/A';
+    referencia = document.getElementById('verTransfRef')?.value?.trim() || 'N/A';
+
+    if (titular) obsExtra = `Titular: ${titular}`;
   }
+
+  const obs =
+    document.getElementById('verObsOTROS')?.value.trim() ||
+    document.getElementById('verObsED')?.value.trim()    ||
+    obsExtra || '';
 
   const payload = {
     id_factura: _facturaActual.id_factura,
@@ -861,7 +998,7 @@ async function aprobarFacturaActual() {
     banco:            banco,
     referencia:       referencia,
     observaciones:    obs || 'N/A',
-    pagos_combinados: pagosCombinados, // Array estructurado si la API lo soporta
+    pagos_combinados: pagosCombinados, // Array estructurado (una fila por cada pago del Pago Combinado)
 
     // Totales recalculados
     subtotal_usd:  verState.subtotalUSD,
@@ -976,10 +1113,15 @@ function _construirNotaEntregaHTML(datos) {
     const renglonesPago = datos.pagosCombinados.map(p => {
       let info = `<strong>${escapeHtml(p.metodo)}:</strong> `;
 
-      if (p.montoUSD) {
+      // Se muestra en la moneda que realmente se recibió (p.moneda), no
+      // simplemente el primer monto que exista, ya que ahora ambos
+      // equivalentes (USD y Bs) viajan siempre juntos en cada línea.
+      if (p.moneda === 'USD') {
+        info += `$${Number(p.montoUSD ?? p.montoNativo ?? 0).toFixed(2)}`;
+      } else if (p.montoBs != null || p.moneda === 'BS') {
+        info += `Bs ${Number(p.montoBs ?? p.montoNativo ?? 0).toFixed(2)}`;
+      } else if (p.montoUSD) {
         info += `$${Number(p.montoUSD).toFixed(2)}`;
-      } else if (p.montoBs) {
-        info += `Bs ${Number(p.montoBs).toFixed(2)}`;
       }
 
       const extras = [];
@@ -1302,8 +1444,9 @@ function setListaEstado(estado, mensaje = '') {
 }
 
 function formatMetodoPago(codigo) {
-  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D', PVC: 'Pago V/C',
-                ED: 'Efectivo $', EBS: 'Efectivo Bs', OTROS: 'Otro' };
+  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D',
+                ED: 'Efectivo $', EBS: 'Efectivo Bs', TRANSF: 'Transferencia Bancaria',
+                COMB: 'Pago Combinado', OTROS: 'Otro' };
   return map[codigo] || codigo || 'N/A';
 }
 
@@ -1372,6 +1515,7 @@ function cerrarModalError() { cerrarModal(); }
 window.seleccionarFactura    = seleccionarFactura;
 window.verAgregarProducto    = verAgregarProducto;
 window.verSelectMetodoPago   = verSelectMetodoPago;
+window.verSeleccionarMetodoPago = verSeleccionarMetodoPago;
 window.aprobarFacturaActual  = aprobarFacturaActual;
 window.cerrarModalError      = cerrarModalError;
 window.imprimirNotaEntrega   = imprimirNotaEntrega;
