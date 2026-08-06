@@ -32,7 +32,7 @@ function _bancosOptionsHtml(seleccionado = '') {
 // forma: { id, codigo, moneda: 'USD'|'BS', monto, banco, referencia }
 const COMB_METODOS = {
   PM:     { label: 'Pago Móvil',              moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 4 },
-  TRANSF: { label: 'Transferencia Bancaria',  moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 1 },
+  TRANSF: { label: 'Transferencia Bancaria',  moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 1, monedaSeleccionable: true },
   PVD:    { label: 'Punto de Venta (Bs)',     moneda: 'BS',  requiereBanco: false, requiereRef: false },
   ED:     { label: 'Efectivo ($)',            moneda: 'USD', requiereBanco: false, requiereRef: false },
   EBS:    { label: 'Efectivo (Bs)',           moneda: 'BS',  requiereBanco: false, requiereRef: false },
@@ -426,7 +426,7 @@ function verSelectMetodoPago(valor) {
     <div style="grid-column: 1 / -1; background: var(--rose-faint); border: 1px solid rgba(192,82,122,.25);
                 border-radius: 10px; padding: 14px 16px; margin-bottom: 4px;">
       <p style="color: var(--text-secondary); font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;">
-        Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'TRANSF' ? 'transferir' : 'pagar'}:
+        Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'PVC' || valor === 'TRANSF' ? 'transferir' : 'pagar'}:
       </p>
       <p class="ver-monto-display" style="color: var(--rose-deep); font-size: 1.4rem; font-weight: 700; margin:0;">
         $${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>
@@ -446,6 +446,12 @@ function verSelectMetodoPago(valor) {
   } else if (valor === 'TRANSF') {
     container.innerHTML = `
       ${montoHeader}
+      <label class="form-field">Moneda de la transferencia
+        <select id="verTransfMoneda">
+          <option value="BS">Bolívares (Bs)</option>
+          <option value="USD">Dólares ($)</option>
+        </select>
+      </label>
       <label class="form-field">Banco
         <select id="verTransfBanco">${_bancosOptionsHtml()}</select>
       </label>
@@ -456,7 +462,7 @@ function verSelectMetodoPago(valor) {
         <input type="text" id="verTransfRef" placeholder="Nº de operación" />
       </label>`;
 
-  } else if (valor === 'PVD') {
+  } else if (valor === 'PVD' || valor === 'PVC') {
     container.innerHTML = montoHeader;
 
   } else if (valor === 'ED') {
@@ -609,7 +615,17 @@ function _renderCombCamposDinamicos() {
 
   let html = '';
 
-  const unidad = def.moneda === 'USD' ? ' ($)' : ' (Bs)';
+  if (def.monedaSeleccionable) {
+    html += `
+      <label class="form-field">Moneda
+        <select id="combMoneda">
+          <option value="BS">Bolívares (Bs)</option>
+          <option value="USD">Dólares ($)</option>
+        </select>
+      </label>`;
+  }
+
+  const unidad = def.monedaSeleccionable ? '' : (def.moneda === 'USD' ? ' ($)' : ' (Bs)');
   html += `
     <label class="form-field">Monto${unidad}
       <input type="number" id="combMontoNuevo" step="0.01" min="0.01" placeholder="0.00" />
@@ -645,7 +661,9 @@ function _combAgregarPago() {
     return;
   }
 
-  const moneda = def.moneda;
+  const moneda = def.monedaSeleccionable
+    ? (document.getElementById('combMoneda')?.value || 'BS')
+    : def.moneda;
 
   let banco = '';
   if (def.requiereBanco) {
@@ -929,11 +947,14 @@ async function aprobarFacturaActual() {
     referencia = document.getElementById('verPmRef')?.value?.trim() || 'N/A';
 
   } else if (metodo === 'TRANSF') {
+    const monedaT = document.getElementById('verTransfMoneda')?.value || 'BS';
     const titular = document.getElementById('verTransfTitular')?.value?.trim();
     banco = document.getElementById('verTransfBanco')?.value || 'N/A';
     referencia = document.getElementById('verTransfRef')?.value?.trim() || 'N/A';
 
-    if (titular) obsExtra = `Titular: ${titular}`;
+    const detalles = [`Moneda: ${monedaT === 'USD' ? 'Dólares ($)' : 'Bolívares (Bs)'}`];
+    if (titular) detalles.push(`Titular: ${titular}`);
+    obsExtra = detalles.join(' · ');
   }
 
   const obs =
@@ -1396,7 +1417,7 @@ function setListaEstado(estado, mensaje = '') {
 }
 
 function formatMetodoPago(codigo) {
-  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D',
+  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D', PVC: 'Pago V/C',
                 ED: 'Efectivo $', EBS: 'Efectivo Bs', TRANSF: 'Transferencia Bancaria',
                 COMB: 'Pago Combinado', OTROS: 'Otro' };
   return map[codigo] || codigo || 'N/A';
