@@ -178,6 +178,25 @@ async function verDetalle(idFactura) {
   }
 
   if (body) {
+    // Desglose línea por línea si la factura se pagó con "Pago Combinado"
+    // (requiere haber ejecutado supabase/pagos_combinados.sql).
+    let pagosCombinadosHtml = '';
+    const pagosCombinados = Array.isArray(factura?.pagos_combinados) ? factura.pagos_combinados : [];
+    if (factura?.metodo_pago === 'COMB' && pagosCombinados.length > 0) {
+      pagosCombinadosHtml = `
+        <h4 style="margin:14px 0 6px; font-family:var(--serif);">Desglose del pago combinado</h4>
+        ${pagosCombinados.map((p) => {
+          const monto = p.moneda === 'USD'
+            ? fmtUSD(p.montoUSD ?? p.montoNativo ?? 0)
+            : `Bs ${fmtBS(p.montoBs ?? p.montoNativo ?? 0)}`;
+          const extra = [p.banco, p.referencia ? `Ref: ${p.referencia}` : ''].filter(Boolean).map(escapeHtml).join(' · ');
+          return `<div class="row">
+            <span>${escapeHtml(p.metodo || p.codigo || 'Pago')}${extra ? ' (' + extra + ')' : ''}</span>
+            <span class="num">${monto}</span>
+          </div>`;
+        }).join('')}`;
+    }
+
     body.innerHTML = `
       <div class="row"><span>Cliente</span><span>${escapeHtml(factura?.nombre)} ${escapeHtml(factura?.apellido)}</span></div>
       <div class="row"><span>Cédula</span><span>${escapeHtml(factura?.cedula)}</span></div>
@@ -187,6 +206,7 @@ async function verDetalle(idFactura) {
       <div class="row"><span>Referencia</span><span>${escapeHtml(factura?.referencia)}</span></div>
       <div class="row"><span>Banco</span><span>${escapeHtml(factura?.banco)}</span></div>
       <div class="row"><span>Observaciones</span><span>${escapeHtml(factura?.observaciones) || 'N/A'}</span></div>
+      ${pagosCombinadosHtml}
       <h4 style="margin:14px 0 6px; font-family:var(--serif);">Productos</h4>
       ${productosHtml}
       <div class="row" style="border-top:2px solid var(--ink); margin-top:8px; font-weight:700;">
