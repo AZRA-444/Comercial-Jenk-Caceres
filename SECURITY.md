@@ -37,7 +37,7 @@ En el panel de Supabase → **Authentication → Providers**:
 En **Table Editor / Database → tu tabla → RLS**, para cada tabla sensible
 (`facturas`, `factura_detalles`, `facturas_temporales`,
 `detalles_factura_temporal`, `comisiones_config`, `comisiones_historial`,
-`comisiones_pagos`):
+`comisiones_pagos`, `clientes`):
 - Activa **Enable RLS**.
 - Agrega una política que solo permita acceso a usuarios autenticados, por
   ejemplo:
@@ -48,6 +48,8 @@ En **Table Editor / Database → tu tabla → RLS**, para cada tabla sensible
   ```
   Repite (con `for select`, `for insert`, `for update`, `for delete` según
   corresponda) para cada tabla y cada operación que el frontend necesite.
+  (`clientes` ya trae RLS activado y sus políticas de "solo autenticados"
+  incluidas en `supabase/clientes.sql`, no requiere este paso manual.)
 
 En **Storage → bucket `comprobantes` → Policies**:
 - **Cambio importante respecto a versiones anteriores:** el flujo que

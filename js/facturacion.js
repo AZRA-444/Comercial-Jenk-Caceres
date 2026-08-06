@@ -50,6 +50,18 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarTasa();
   configurarDelegacionEventos();
   inyectarEstilosAccionesProducto();
+
+  // Autorrelleno de cliente: al escribir la cédula, si ya existe un
+  // cliente registrado con esa cédula se completan nombre, apellido y
+  // teléfono automáticamente (ver js/clientes.js).
+  activarAutorrellenoCliente({
+    inputCedula: document.getElementById("documentID"),
+    campos: {
+      nombre: document.getElementById("nameClient"),
+      apellido: document.getElementById("secondNameClient"),
+      telefono: document.getElementById("numberPhone"),
+    },
+  });
 });
 
 //--- ESTILOS MÍNIMOS PARA LOS BOTONES DE ACCIÓN DE CADA PRODUCTO ---//
@@ -649,6 +661,15 @@ async function finalizarCompra() {
     state.compraExitosa = true;
     state.listaProductos = [];
     actualizarTabla();
+
+    // Actualiza el directorio de clientes en segundo plano (no bloquea
+    // ni condiciona el éxito de la venta, que ya quedó guardada).
+    guardarClienteSiNuevo({
+      cedula: facturaData.cedula,
+      nombre: facturaData.nombre,
+      apellido: facturaData.apellido,
+      telefono: facturaData.telefono,
+    });
 
     setTimeout(() => {
       location.reload();
