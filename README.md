@@ -3,7 +3,7 @@
 
 *Sistema web de gestión comercial: facturación, pedidos, verificación de pagos, reportes y panel administrativo*
 
-Versión del documento: 1.1
+Versión del documento: 1.2
 
 ---
 
