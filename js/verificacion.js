@@ -32,7 +32,7 @@ function _bancosOptionsHtml(seleccionado = '') {
 // forma: { id, codigo, moneda: 'USD'|'BS', monto, banco, referencia }
 const COMB_METODOS = {
   PM:     { label: 'Pago Móvil',              moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 4 },
-  TRANSF: { label: 'Transferencia Bancaria',  moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 1, monedaSeleccionable: true },
+  TRANSF: { label: 'Transferencia Bancaria',  moneda: 'BS',  requiereBanco: true,  requiereRef: true,  refMin: 1 },
   PVD:    { label: 'Punto de Venta (Bs)',     moneda: 'BS',  requiereBanco: false, requiereRef: false },
   ED:     { label: 'Efectivo ($)',            moneda: 'USD', requiereBanco: false, requiereRef: false },
   EBS:    { label: 'Efectivo (Bs)',           moneda: 'BS',  requiereBanco: false, requiereRef: false },
@@ -67,7 +67,50 @@ document.addEventListener('DOMContentLoaded', () => {
   // Delegación de eventos para los botones de la tabla
   document.getElementById('tablaVerificacionProductos')
     .addEventListener('click', _manejarClickTabla);
+
+  // Selector visual de método de pago (grilla de botones)
+  document.getElementById('verPagoMethodGrid')
+    .addEventListener('click', (e) => {
+      const btn = e.target.closest('.pago-method-btn');
+      if (!btn) return;
+      verSeleccionarMetodoPago(btn.dataset.valor);
+    });
 });
+
+/** Marca visualmente el método elegido, sincroniza el select oculto y
+ *  dispara el render de los campos dinámicos correspondientes. */
+function verSeleccionarMetodoPago(valor) {
+  document.querySelectorAll('.pago-method-btn').forEach(btn => {
+    const activo = btn.dataset.valor === valor;
+    btn.classList.toggle('active', activo);
+    btn.setAttribute('aria-checked', String(activo));
+  });
+
+  const select = document.getElementById('verMetodoPago');
+  if (select) select.value = valor;
+
+  verSelectMetodoPago(valor);
+}
+
+/** Vuelve la sección de pago a su estado inicial (sin método elegido). */
+function _resetSeccionPago() {
+  document.querySelectorAll('.pago-method-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.setAttribute('aria-checked', 'false');
+  });
+
+  const select = document.getElementById('verMetodoPago');
+  if (select) select.value = '';
+
+  const container = document.getElementById('verPaymentDetails');
+  if (container) {
+    container.innerHTML = `
+      <div class="pago-placeholder" id="verPagoPlaceholder">
+        <i class="fa-regular fa-hand-pointer"></i>
+        <p>Selecciona un método de pago arriba para continuar</p>
+      </div>`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 1. Carga de facturas pendientes
@@ -169,6 +212,9 @@ function seleccionarFactura(index) {
 
   // Limpiar formulario de agregar producto
   _limpiarFormAgregar();
+
+  // Reiniciar la sección de pago (método elegido en la factura anterior no debe arrastrarse)
+  _resetSeccionPago();
 
   // Renderizar tabla y totales
   verActualizarTabla();
@@ -423,14 +469,16 @@ function verSelectMetodoPago(valor) {
   const totalBS  = verState.totalBS;
 
   const montoHeader = `
-    <div style="grid-column: 1 / -1; background: var(--rose-faint); border: 1px solid rgba(192,82,122,.25);
-                border-radius: 10px; padding: 14px 16px; margin-bottom: 4px;">
-      <p style="color: var(--text-secondary); font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;">
-        Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'PVC' || valor === 'TRANSF' ? 'transferir' : 'pagar'}:
-      </p>
-      <p class="ver-monto-display" style="color: var(--rose-deep); font-size: 1.4rem; font-weight: 700; margin:0;">
-        $${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>
-      </p>
+    <div class="ver-monto-box">
+      <span class="ver-monto-box-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+      <div class="ver-monto-box-text">
+        <p class="ver-monto-box-label">
+          Monto a ${valor === 'PM' || valor === 'PVD' || valor === 'TRANSF' ? 'transferir' : 'pagar'}
+        </p>
+        <p class="ver-monto-display">
+          $${totalUSD.toFixed(2)} <span>/ Bs ${totalBS.toFixed(2)}</span>
+        </p>
+      </div>
     </div>`;
 
   if (valor === 'PM') {
@@ -446,12 +494,6 @@ function verSelectMetodoPago(valor) {
   } else if (valor === 'TRANSF') {
     container.innerHTML = `
       ${montoHeader}
-      <label class="form-field">Moneda de la transferencia
-        <select id="verTransfMoneda">
-          <option value="BS">Bolívares (Bs)</option>
-          <option value="USD">Dólares ($)</option>
-        </select>
-      </label>
       <label class="form-field">Banco
         <select id="verTransfBanco">${_bancosOptionsHtml()}</select>
       </label>
@@ -462,7 +504,7 @@ function verSelectMetodoPago(valor) {
         <input type="text" id="verTransfRef" placeholder="Nº de operación" />
       </label>`;
 
-  } else if (valor === 'PVD' || valor === 'PVC') {
+  } else if (valor === 'PVD') {
     container.innerHTML = montoHeader;
 
   } else if (valor === 'ED') {
@@ -583,7 +625,7 @@ function verSelectMetodoPago(valor) {
 function _actualizarMontoPago(metodo, totalUSD, totalBS) {
   const el = document.querySelector('.ver-monto-display');
   if (!el) return;
-  el.innerHTML = `$${totalUSD.toFixed(2)} <span style="color:var(--text-secondary); font-size:.9rem;">/ Bs ${totalBS.toFixed(2)}</span>`;
+  el.innerHTML = `$${totalUSD.toFixed(2)} <span>/ Bs ${totalBS.toFixed(2)}</span>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -615,17 +657,7 @@ function _renderCombCamposDinamicos() {
 
   let html = '';
 
-  if (def.monedaSeleccionable) {
-    html += `
-      <label class="form-field">Moneda
-        <select id="combMoneda">
-          <option value="BS">Bolívares (Bs)</option>
-          <option value="USD">Dólares ($)</option>
-        </select>
-      </label>`;
-  }
-
-  const unidad = def.monedaSeleccionable ? '' : (def.moneda === 'USD' ? ' ($)' : ' (Bs)');
+  const unidad = def.moneda === 'USD' ? ' ($)' : ' (Bs)';
   html += `
     <label class="form-field">Monto${unidad}
       <input type="number" id="combMontoNuevo" step="0.01" min="0.01" placeholder="0.00" />
@@ -661,9 +693,7 @@ function _combAgregarPago() {
     return;
   }
 
-  const moneda = def.monedaSeleccionable
-    ? (document.getElementById('combMoneda')?.value || 'BS')
-    : def.moneda;
+  const moneda = def.moneda;
 
   let banco = '';
   if (def.requiereBanco) {
@@ -947,14 +977,11 @@ async function aprobarFacturaActual() {
     referencia = document.getElementById('verPmRef')?.value?.trim() || 'N/A';
 
   } else if (metodo === 'TRANSF') {
-    const monedaT = document.getElementById('verTransfMoneda')?.value || 'BS';
     const titular = document.getElementById('verTransfTitular')?.value?.trim();
     banco = document.getElementById('verTransfBanco')?.value || 'N/A';
     referencia = document.getElementById('verTransfRef')?.value?.trim() || 'N/A';
 
-    const detalles = [`Moneda: ${monedaT === 'USD' ? 'Dólares ($)' : 'Bolívares (Bs)'}`];
-    if (titular) detalles.push(`Titular: ${titular}`);
-    obsExtra = detalles.join(' · ');
+    if (titular) obsExtra = `Titular: ${titular}`;
   }
 
   const obs =
@@ -1417,7 +1444,7 @@ function setListaEstado(estado, mensaje = '') {
 }
 
 function formatMetodoPago(codigo) {
-  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D', PVC: 'Pago V/C',
+  const map = { PM: 'Pago Móvil', PVD: 'Pago V/D',
                 ED: 'Efectivo $', EBS: 'Efectivo Bs', TRANSF: 'Transferencia Bancaria',
                 COMB: 'Pago Combinado', OTROS: 'Otro' };
   return map[codigo] || codigo || 'N/A';
@@ -1488,6 +1515,7 @@ function cerrarModalError() { cerrarModal(); }
 window.seleccionarFactura    = seleccionarFactura;
 window.verAgregarProducto    = verAgregarProducto;
 window.verSelectMetodoPago   = verSelectMetodoPago;
+window.verSeleccionarMetodoPago = verSeleccionarMetodoPago;
 window.aprobarFacturaActual  = aprobarFacturaActual;
 window.cerrarModalError      = cerrarModalError;
 window.imprimirNotaEntrega   = imprimirNotaEntrega;
