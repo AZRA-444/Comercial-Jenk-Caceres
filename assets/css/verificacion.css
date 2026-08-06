@@ -369,11 +369,128 @@ label:has(.mix-method-chk:checked) {
 .ver-pago-form {
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 10px; padding: 16px;
-  display: flex; flex-direction: column; gap: 14px;
+  display: flex; flex-direction: column; gap: 16px;
 }
+
+.pago-method-caption {
+  font-size: .78rem; font-weight: 600; color: var(--muted);
+  display: block; margin-bottom: 2px;
+}
+
+/* Select nativo oculto — se mantiene en el DOM por compatibilidad,
+   pero fuera de la vista y del flujo de tabulación. */
+.sr-only-select {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ── Selector visual de método de pago ── */
+.pago-method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(102px, 1fr));
+  gap: 10px;
+}
+
+.pago-method-btn {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 14px 10px 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  text-align: center;
+  transition: border-color .15s var(--ease), background-color .15s var(--ease),
+              transform .15s var(--ease), box-shadow .15s var(--ease);
+}
+
+.pago-method-btn i {
+  font-size: 1.15rem; color: var(--muted-2);
+  transition: color .15s var(--ease);
+}
+
+.pago-method-btn span {
+  font-size: .74rem; font-weight: 600; line-height: 1.2;
+}
+
+.pago-method-btn:hover {
+  border-color: var(--rose-light);
+  background: var(--rose-faint);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26,18,24,.06);
+}
+.pago-method-btn:hover i { color: var(--rose); }
+
+.pago-method-btn:focus-visible {
+  outline: 2px solid var(--rose); outline-offset: 2px;
+}
+
+.pago-method-btn.active {
+  border-color: var(--rose);
+  background: var(--rose-faint);
+  color: var(--rose-deep);
+  box-shadow: 0 0 0 3px rgba(192,82,122,.14);
+}
+.pago-method-btn.active i { color: var(--rose); }
+
+.pago-method-btn.active::after {
+  content: "";
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--rose); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .55rem; box-shadow: 0 2px 6px rgba(140,51,87,.35);
+  content: "\f00c"; font-family: "Font Awesome 6 Free"; font-weight: 900;
+}
+
+@media (max-width: 420px) {
+  .pago-method-grid { grid-template-columns: repeat(3, 1fr); }
+  .pago-method-btn span { font-size: .68rem; }
+}
+
 #verPaymentDetails {
   display: grid; grid-template-columns: 1fr; gap: 14px;
 }
+
+/* Placeholder mostrado antes de elegir un método */
+.pago-placeholder {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 26px 16px;
+  color: var(--muted-2); font-size: .82rem; text-align: center;
+  border: 1px dashed var(--border-2); border-radius: 10px;
+}
+.pago-placeholder i { font-size: 1.4rem; opacity: .6; }
+
+/* Caja "monto a pagar" dentro del panel dinámico */
+.ver-monto-box {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, var(--rose-faint), var(--surface));
+  border: 1px solid rgba(192,82,122,.25);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 14px;
+}
+.ver-monto-box-icon {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px;
+  background: var(--rose); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: .95rem;
+}
+.ver-monto-box-text { min-width: 0; }
+.ver-monto-box-label {
+  color: var(--text-secondary); font-size: .74rem;
+  text-transform: uppercase; letter-spacing: .5px; font-weight: 600;
+  margin-bottom: 2px;
+}
+.ver-monto-display {
+  color: var(--rose-deep); font-size: 1.35rem; font-weight: 700; margin: 0;
+}
+.ver-monto-display .comb-sub,
+.ver-monto-display span { color: var(--text-secondary); font-size: .85rem; font-weight: 500; }
 .ver-pago-form textarea {
   width: 100%; padding: 10px 12px;
   border: 1px solid var(--border-2); border-radius: 8px;
