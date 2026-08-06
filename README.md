@@ -3,7 +3,7 @@
 
 *Sistema web de gestión comercial: facturación, pedidos, verificación de pagos, reportes y panel administrativo*
 
-Versión del documento: 1.2
+Versión del documento: 1.1
 
 ---
 
@@ -274,7 +274,7 @@ Landing con seis tarjetas de acceso a los módulos: Nueva venta, Pedidos, Verifi
 Venta directa de mostrador. Flujo típico:
 
 - Se cargan los productos y se calcula el total en USD y en bolívares según la tasa del día (consultada a la API `open.er-api.com` y guardada en `localStorage` como respaldo).
-- Se capturan los datos del cliente (nombre, cédula, teléfono) con formateo automático de campos.
+- Se capturan los datos del cliente (nombre, cédula, teléfono) con formateo automático de campos. Al escribir la cédula, si ya existe un cliente registrado con ese número (tabla `clientes`), nombre/apellido/teléfono se autorrellenan solos (`js/clientes.js`).
 - Validaciones de formulario y modales de carga / éxito / error.
 - Bloqueo de "salir sin guardar" (evento `beforeunload`) para no perder una venta a medio capturar.
 - Al confirmar, la factura se envía como TEMPORAL a `POST /api/precargar-factura`.
@@ -284,7 +284,7 @@ Venta directa de mostrador. Flujo típico:
 
 Pensado para ventas gestionadas por WhatsApp, permitiendo atender varios pedidos en paralelo.
 
-- Barra lateral para manejar múltiples pedidos abiertos a la vez, cada uno con su propio cliente, productos y tasa de cambio.
+- Barra lateral para manejar múltiples pedidos abiertos a la vez, cada uno con su propio cliente, productos y tasa de cambio. Igual que en Facturación, escribir la cédula autorrellena los datos si el cliente ya está registrado.
 - Genera una vista previa del mensaje al estilo burbuja de WhatsApp y abre WhatsApp (`wa.me`) con el mensaje ya redactado.
 - Persistencia local: guarda un borrador de cada pedido y una cola de "pendientes por enviar" en `localStorage`, con reintento manual si falla la conexión al guardar (mismo endpoint que Facturación: `/api/precargar-factura`).
 
@@ -394,6 +394,7 @@ No existe un archivo de esquema SQL completo en el repositorio; las siguientes t
 | `comisiones_historial` | Historial de comisiones calculadas/pagadas. |
 | `comisiones_pagos` | Registro de pagos de comisión realizados (por vendedor y mes). |
 | `perfiles` | Una fila por usuario de Supabase Auth, con su rol (`admin` \| `personal`). |
+| `clientes` | Directorio de clientes (cédula única, nombre, apellido, teléfono). Se precarga una vez desde `facturas`/`facturas_temporales` (`supabase/clientes.sql`) y se mantiene al día automáticamente al confirmar cada venta. Alimenta el autorrelleno por cédula en Facturación y Pedidos (`js/clientes.js`). |
 
 ### 9.2 Funciones RPC (Postgres)
 
@@ -496,6 +497,7 @@ Activa `cleanUrls` y define dos *rewrites* de rutas amigables:
 | `js/facturasRecientes.js` | Lógica de Historial (facturas definitivas del día). |
 | `js/admin-panel.js` | Lógica del Panel de administración: KPIs, gráficos y comisiones. |
 | `js/reportes.js` | Lógica de Reportes: cierre de caja, ventas, comisiones e impresión. |
+| `js/clientes.js` | Directorio de clientes: busca por cédula (`buscarClientePorCedula`), autorrellena nombre/apellido/teléfono en un formulario (`activarAutorrellenoCliente`, usado en Facturación y Pedidos) y actualiza el registro tras cada venta confirmada (`guardarClienteSiNuevo`). |
 
 ### 12.2 Backend (Python)
 

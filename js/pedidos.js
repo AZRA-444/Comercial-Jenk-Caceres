@@ -97,6 +97,22 @@ document.addEventListener('DOMContentLoaded', () => {
   inputCedula?.addEventListener('input',   onCampoClienteInput(formatDoc));
   inputTelefono?.addEventListener('input', onCampoClienteInput(formatPhone));
 
+  // Autorrelleno de cliente: al escribir la cédula, si ya existe un
+  // cliente registrado con esa cédula se completan nombre, apellido y
+  // teléfono automáticamente (ver js/clientes.js).
+  activarAutorrellenoCliente({
+    inputCedula: inputCedula,
+    campos: {
+      nombre: inputNombre,
+      apellido: inputApellido,
+      telefono: inputTelefono,
+    },
+    onEncontrado: () => {
+      pedSyncCliente();
+      _guardarBorradorLocalDebounced();
+    },
+  });
+
   document.getElementById('pedTasaInput')
     ?.addEventListener('input', () => _guardarBorradorLocalDebounced());
 
@@ -967,6 +983,15 @@ async function _enviarFacturaAlBackend(payload, pedidoId) {
     _quitarPendienteLocal(payload.id_factura);
     mostrarModalExitoPedido();
     _quitarPedidoDeListaActiva(pedidoId);
+
+    // Actualiza el directorio de clientes en segundo plano (no bloquea
+    // ni condiciona el éxito del pedido, que ya quedó guardado).
+    guardarClienteSiNuevo({
+      cedula: payload.cedula,
+      nombre: payload.nombre,
+      apellido: payload.apellido,
+      telefono: payload.telefono,
+    });
   } catch (error) {
     console.error('Error al enviar el pedido a facturación:', error);
     // Se guarda localmente para no perder el pedido; se reintentará solo
