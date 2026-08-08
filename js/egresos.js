@@ -10,6 +10,22 @@ let __modoEdicionEgreso = null; // null = nuevo, id = edición
 let chartEgCategoria = null;
 let chartEgDias = null;
 
+// ── Headers con JWT de sesión activa (para escrituras con RLS) ──
+// La anon key sola solo pasa RLS en SELECT. Para INSERT/PATCH/DELETE
+// con políticas "to authenticated", Supabase exige el JWT del usuario.
+// window.__authClient lo inyecta auth-guard.js que se carga antes.
+async function getWriteHeaders() {
+  const session = await window.__authClient?.auth?.getSession?.();
+  const jwt = session?.data?.session?.access_token;
+  if (!jwt) throw new Error("Sesión expirada. Recarga la página e inicia sesión de nuevo.");
+  return {
+    apikey:         SUPABASE_ANON_KEY,
+    Authorization:  "Bearer " + jwt,
+    "Content-Type": "application/json",
+    "Prefer":       "return=minimal",
+  };
+}
+
 // ── Etiquetas legibles por tipo ────────────────────────────
 const TIPO_LABELS = {
   compra:         "Compra / Mercancía",
@@ -285,18 +301,19 @@ async function guardarEgreso() {
   };
 
   try {
+    const wHeaders = await getWriteHeaders();
     let res;
     if (__modoEdicionEgreso) {
-      // PUT (actualizar)
+      // PATCH (actualizar)
       res = await fetch(
         `${SUPABASE_URL}/rest/v1/egresos?id=eq.${encodeQueryValue(__modoEdicionEgreso)}`,
-        { method: "PATCH", headers: { ...headers, "Prefer": "return=minimal" }, body: JSON.stringify(payload) }
+        { method: "PATCH", headers: wHeaders, body: JSON.stringify(payload) }
       );
     } else {
       // POST (insertar)
       res = await fetch(
         `${SUPABASE_URL}/rest/v1/egresos`,
-        { method: "POST", headers: { ...headers, "Prefer": "return=minimal" }, body: JSON.stringify(payload) }
+        { method: "POST", headers: wHeaders, body: JSON.stringify(payload) }
       );
     }
 
@@ -319,9 +336,10 @@ async function eliminarEgreso(id) {
   if (!confirm("¿Confirmas que deseas eliminar este egreso? Esta acción no se puede deshacer.")) return;
 
   try {
+    const wHeaders = await getWriteHeaders();
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/egresos?id=eq.${encodeQueryValue(id)}`,
-      { method: "DELETE", headers }
+      { method: "DELETE", headers: wHeaders }
     );
     if (!res.ok) throw new Error("Error " + res.status);
     await buscarEgresos();
