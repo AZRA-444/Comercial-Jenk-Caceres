@@ -9,6 +9,9 @@ let chartFinDonut       = null;
 let chartFinFlujo       = null;
 let chartFinHistorico   = null;
 
+// ── Evitar ejecuciones concurrentes de calcularFinanzas ─────
+let __finCalculando = false;
+
 // ── JWT de sesión para todas las peticiones a Supabase ──────
 // Con RLS activo, tanto SELECT como escrituras necesitan el token
 // del usuario autenticado, no solo la anon key.
@@ -97,6 +100,8 @@ function mesLabel(mesStr) {
 async function calcularFinanzas() {
   const mes = document.getElementById("fin-mes")?.value;
   if (!mes) { statusFin("Selecciona un mes.", true); return; }
+  if (__finCalculando) return; // ignorar llamadas mientras ya hay una en curso
+  __finCalculando = true;
 
   statusFin("Cargando datos financieros…");
 
@@ -169,6 +174,8 @@ async function calcularFinanzas() {
   } catch (err) {
     console.error(err);
     statusFin("No se pudo calcular: " + err.message, true);
+  } finally {
+    __finCalculando = false;
   }
 }
 
@@ -193,7 +200,7 @@ function renderFinChartComparativa(facturas, egresos) {
 
   const canvas = document.getElementById("chart-fin-comparativa");
   if (!canvas) return;
-  if (chartFinComparativa) chartFinComparativa.destroy();
+  if (chartFinComparativa) { chartFinComparativa.destroy(); chartFinComparativa = null; }
 
   chartFinComparativa = new ChartLib(canvas, {
     type: "bar",
@@ -242,7 +249,7 @@ function renderFinChartDonut(totEg) {
 
   const canvas = document.getElementById("chart-fin-donut");
   if (!canvas) return;
-  if (chartFinDonut) chartFinDonut.destroy();
+  if (chartFinDonut) { chartFinDonut.destroy(); chartFinDonut = null; }
 
   const cats = [
     { key: "compra",         label: "Compras" },
@@ -291,7 +298,7 @@ function renderFinChartFlujo(facturas, egresos, mes) {
 
   const canvas = document.getElementById("chart-fin-flujo");
   if (!canvas) return;
-  if (chartFinFlujo) chartFinFlujo.destroy();
+  if (chartFinFlujo) { chartFinFlujo.destroy(); chartFinFlujo = null; }
 
   // Construir todos los días del mes
   const [y, m] = mes.split("-").map(Number);
@@ -366,7 +373,17 @@ async function renderFinHistorico(mesBase) {
 
   const canvas = document.getElementById("chart-fin-historico");
   if (!canvas) return;
-  if (chartFinHistorico) chartFinHistorico.destroy();
+
+  // Destruir ANTES del await para que Chart.js libere el canvas
+  // inmediatamente, sin esperar a que resuelvan los fetches
+  if (chartFinHistorico) {
+    chartFinHistorico.destroy();
+    chartFinHistorico = null;
+  }
+  // Limpiar el canvas manualmente para garantizar que Chart.js
+  // no lo considere "in use" durante el await que sigue
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const meses = ultimos6Meses(mesBase);
 
