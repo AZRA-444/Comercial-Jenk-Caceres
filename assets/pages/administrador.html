@@ -32,6 +32,8 @@
     <div class="ledger-tabs">
       <button class="active" data-panel="ventas">Ventas del mes</button>
       <button data-panel="comisiones">Comisiones</button>
+      <button data-panel="egresos"><i class="fas fa-arrow-trend-down" style="margin-right:5px;"></i>Egresos</button>
+      <button data-panel="finanzas"><i class="fas fa-chart-pie" style="margin-right:5px;"></i>Finanzas</button>
     </div>
 
     <!-- ── PANEL VENTAS ── -->
@@ -209,7 +211,277 @@
       </div>
     </div>
 
+    <!-- ── PANEL EGRESOS ── -->
+    <div class="panel" id="panel-egresos">
+
+      <!-- Filtros de egresos -->
+      <div class="filters">
+        <div class="field">
+          <label for="eg-mes">Mes</label>
+          <input type="month" id="eg-mes"/>
+        </div>
+        <div class="field">
+          <label for="eg-tipo">Tipo de egreso</label>
+          <select id="eg-tipo">
+            <option value="">Todos</option>
+            <option value="compra">Compra / Mercancía</option>
+            <option value="gasto_empresa">Gasto Empresa</option>
+            <option value="gasto_personal">Gasto Personal</option>
+            <option value="servicio">Servicio / Factura</option>
+            <option value="nomina">Nómina / Comisión</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="eg-desc">Descripción</label>
+          <input type="text" id="eg-desc" placeholder="Buscar descripción…"/>
+        </div>
+        <button class="btn btn-primary" id="btn-buscar-eg">
+          <i class="fas fa-magnifying-glass"></i> Buscar
+        </button>
+        <button class="btn ghost" id="btn-limpiar-eg">
+          <i class="fas fa-xmark"></i> Limpiar
+        </button>
+        <button class="btn btn-success" id="btn-nuevo-egreso" style="background:var(--success);color:#fff;">
+          <i class="fas fa-plus"></i> Nuevo egreso
+        </button>
+      </div>
+
+      <div class="status-msg" id="status-egresos"></div>
+
+      <!-- KPIs egresos -->
+      <div class="kpis">
+        <div class="kpi kpi-danger">
+          <div class="label">Total egresos mes</div>
+          <div class="value" id="kpi-eg-total">$0.00</div>
+        </div>
+        <div class="kpi kpi-amber">
+          <div class="label">Compras / Mercancía</div>
+          <div class="value" id="kpi-eg-compras">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Gastos empresa</div>
+          <div class="value" id="kpi-eg-empresa">$0.00</div>
+        </div>
+        <div class="kpi kpi-rose">
+          <div class="label">Gastos personales</div>
+          <div class="value" id="kpi-eg-personal">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Nómina / Comisiones</div>
+          <div class="value" id="kpi-eg-nomina">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Gráfica egresos por categoría -->
+      <div class="charts">
+        <div class="chart-card">
+          <h3>Egresos por categoría (USD)</h3>
+          <canvas id="chart-eg-categoria"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Evolución de egresos del mes</h3>
+          <canvas id="chart-eg-dias"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabla de egresos -->
+      <h2 class="section-title">
+        Registro de egresos <small id="eg-count-label"></small>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Descripción</th>
+              <th>Proveedor / Persona</th>
+              <th class="num">Monto USD</th>
+              <th class="num">Monto Bs</th>
+              <th>Método</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-egresos"></tbody>
+        </table>
+        <div class="empty-state" id="empty-egresos" style="display:none;">
+          <i class="fas fa-receipt" style="font-size:1.8rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          No hay egresos registrados en ese período.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL FINANZAS ── -->
+    <div class="panel" id="panel-finanzas">
+
+      <!-- Selector de mes finanzas -->
+      <div class="filters" style="max-width:420px;">
+        <div class="field">
+          <label for="fin-mes">Mes a analizar</label>
+          <input type="month" id="fin-mes"/>
+        </div>
+        <button class="btn btn-primary" id="btn-calcular-fin">
+          <i class="fas fa-calculator"></i> Calcular
+        </button>
+      </div>
+
+      <div class="status-msg" id="status-finanzas"></div>
+
+      <!-- KPIs Finanzas — fila 1: ingresos vs egresos -->
+      <h2 class="section-title" style="margin-top:4px;">Resumen del mes</h2>
+      <div class="kpis fin-kpis-top">
+        <div class="kpi kpi-success">
+          <div class="kpi-icon"><i class="fas fa-arrow-trend-up"></i></div>
+          <div class="label">Ingresos brutos</div>
+          <div class="value" id="fin-ingresos">$0.00</div>
+          <div class="sub" id="fin-ingresos-sub">0 facturas</div>
+        </div>
+        <div class="kpi kpi-danger">
+          <div class="kpi-icon"><i class="fas fa-arrow-trend-down"></i></div>
+          <div class="label">Total egresos</div>
+          <div class="value" id="fin-egresos">$0.00</div>
+          <div class="sub" id="fin-egresos-sub">0 registros</div>
+        </div>
+        <div class="kpi kpi-highlight">
+          <div class="kpi-icon"><i class="fas fa-scale-balanced"></i></div>
+          <div class="label">Ganancia neta</div>
+          <div class="value" id="fin-neta">$0.00</div>
+          <div class="sub" id="fin-margen">0% de margen</div>
+        </div>
+      </div>
+
+      <!-- KPIs Finanzas — fila 2: desglose egresos -->
+      <div class="kpis" style="margin-top:0; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
+        <div class="kpi kpi-amber">
+          <div class="label">Compras / Mercancía</div>
+          <div class="value" id="fin-compras">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Gastos empresa</div>
+          <div class="value" id="fin-gasto-emp">$0.00</div>
+        </div>
+        <div class="kpi kpi-rose">
+          <div class="label">Gastos personales</div>
+          <div class="value" id="fin-gasto-per">$0.00</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Nómina / Comisiones</div>
+          <div class="value" id="fin-nomina">$0.00</div>
+        </div>
+        <div class="kpi kpi-success">
+          <div class="label">Ahorro en caja</div>
+          <div class="value" id="fin-ahorro">$0.00</div>
+          <div class="sub" id="fin-ahorro-sub">Ganancia neta acumulada</div>
+        </div>
+      </div>
+
+      <!-- Gráficas finanzas -->
+      <div class="charts fin-charts-grid">
+        <div class="chart-card fin-chart-main">
+          <h3>Ingresos vs Egresos por día</h3>
+          <canvas id="chart-fin-comparativa"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Distribución de egresos</h3>
+          <canvas id="chart-fin-donut"></canvas>
+        </div>
+        <div class="chart-card fin-chart-wide">
+          <h3>Flujo de caja acumulado del mes</h3>
+          <canvas id="chart-fin-flujo"></canvas>
+        </div>
+      </div>
+
+      <!-- Comparativa mensual histórica -->
+      <h2 class="section-title" style="margin-top:8px;">Comparativa últimos 6 meses</h2>
+      <div class="chart-card" style="margin-bottom:28px;">
+        <h3>Ingresos / Egresos / Ganancia neta (USD)</h3>
+        <canvas id="chart-fin-historico" style="max-height:260px;"></canvas>
+      </div>
+
+      <!-- Tabla resumen mensual -->
+      <h2 class="section-title">Detalle financiero del mes</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Concepto</th>
+              <th class="num">Monto USD</th>
+              <th class="num">% del ingreso</th>
+              <th>Observación</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-finanzas"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div><!-- /wrap -->
+
+  <!-- Modal nuevo/editar egreso -->
+  <div class="modal-overlay" id="modal-egreso">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-head">
+        <h3 id="modal-egreso-title">Nuevo Egreso</h3>
+        <button id="modal-egreso-close" aria-label="Cerrar" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--muted);">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="field" style="grid-column:1/-1;">
+            <label for="eg-f-tipo">Tipo de egreso *</label>
+            <select id="eg-f-tipo">
+              <option value="compra">Compra / Mercancía</option>
+              <option value="gasto_empresa">Gasto Empresa</option>
+              <option value="gasto_personal">Gasto Personal</option>
+              <option value="servicio">Servicio / Factura</option>
+              <option value="nomina">Nómina / Comisión</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="field" style="grid-column:1/-1;">
+            <label for="eg-f-desc">Descripción *</label>
+            <input type="text" id="eg-f-desc" placeholder="Ej: Compra de mercancía a proveedor X"/>
+          </div>
+          <div class="field">
+            <label for="eg-f-proveedor">Proveedor / Persona</label>
+            <input type="text" id="eg-f-proveedor" placeholder="Nombre del proveedor"/>
+          </div>
+          <div class="field">
+            <label for="eg-f-fecha">Fecha *</label>
+            <input type="date" id="eg-f-fecha"/>
+          </div>
+          <div class="field">
+            <label for="eg-f-monto">Monto USD *</label>
+            <input type="number" id="eg-f-monto" min="0" step="0.01" placeholder="0.00"/>
+          </div>
+          <div class="field">
+            <label for="eg-f-monto-bs">Monto Bs (opcional)</label>
+            <input type="number" id="eg-f-monto-bs" min="0" step="0.01" placeholder="0.00"/>
+          </div>
+          <div class="field" style="grid-column:1/-1;">
+            <label for="eg-f-metodo">Método de pago</label>
+            <select id="eg-f-metodo">
+              <option value="efectivo_usd">Efectivo USD</option>
+              <option value="efectivo_bs">Efectivo Bs</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="pago_movil">Pago Móvil</option>
+              <option value="punto">Punto de venta</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="field" style="grid-column:1/-1;">
+            <label for="eg-f-obs">Observaciones</label>
+            <textarea id="eg-f-obs" rows="2" placeholder="Notas adicionales…"></textarea>
+          </div>
+        </div>
+        <div class="status-msg" id="status-egreso-form" style="margin-top:8px;"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="eg-cancelar">Cancelar</button>
+        <button class="btn btn-primary" id="eg-guardar"><i class="fas fa-floppy-disk"></i> Guardar egreso</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal detalle factura -->
   <div class="modal-overlay" id="modal-detalle">
@@ -255,5 +527,7 @@
   <script src="../../js/utils.js"></script>
   <script src="../../js/auth-guard.js"></script>
   <script src="../../js/admin-panel.js"></script>
+  <script src="../../js/egresos.js"></script>
+  <script src="../../js/finanzas.js"></script>
 </body>
 </html>

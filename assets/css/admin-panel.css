@@ -297,3 +297,138 @@ tbody td.text-wrap, thead th.text-wrap {
   .kpis   { grid-template-columns: repeat(5, 1fr); }
   .charts { grid-template-columns: 1.4fr 1fr 1fr; }
 }
+
+/* ============================================================
+   MÓDULO EGRESOS
+   ============================================================ */
+
+/* KPI variants de color */
+.kpi.kpi-danger::before  { background: var(--danger); }
+.kpi.kpi-amber::before   { background: var(--amber); }
+.kpi.kpi-rose::before    { background: var(--rose); }
+.kpi.kpi-success::before { background: var(--success); }
+.kpi.kpi-highlight::before { background: linear-gradient(90deg, var(--rose), #3b82f6); }
+
+.kpi.kpi-danger  .value { color: var(--danger); }
+.kpi.kpi-amber   .value { color: var(--amber); }
+.kpi.kpi-rose    .value { color: var(--rose-deep); }
+.kpi.kpi-success .value { color: var(--success); }
+
+/* ── KPI icon ── */
+.kpi-icon {
+  font-size: 1.1rem;
+  margin-bottom: 6px;
+  opacity: .6;
+}
+.kpi.kpi-success .kpi-icon { color: var(--success); }
+.kpi.kpi-danger  .kpi-icon { color: var(--danger);  }
+.kpi.kpi-highlight .kpi-icon { color: #3b82f6; }
+
+/* ── Tag tipo egreso (inline) ── */
+.tag-tipo {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ── Btn success override ── */
+.btn-success {
+  background: var(--success) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.btn-success:hover {
+  background: #245f40 !important;
+  transform: translateY(-1px);
+}
+
+/* ── Tabla filas destacadas (finanzas) ── */
+tr.fila-ingreso  td { background: rgba(16,185,129,.05); font-weight: 600; }
+tr.fila-positivo td:first-child { font-weight: 700; }
+tr.fila-negativo td:first-child { font-weight: 700; }
+tr.fila-positivo td:nth-child(2) { color: var(--success) !important; }
+tr.fila-negativo td:nth-child(2) { color: var(--danger)  !important; }
+
+/* ============================================================
+   MÓDULO FINANZAS
+   ============================================================ */
+
+/* KPIs superiores (3 grandes con ícono) */
+.fin-kpis-top {
+  grid-template-columns: 1fr !important;
+  margin-bottom: 14px;
+}
+
+.fin-kpis-top .kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fin-kpis-top .kpi .value {
+  font-size: 2rem;
+}
+
+/* Grilla de gráficas finanzas */
+.fin-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+/* Tabla detalle financiero */
+#tbody-finanzas tr { border-bottom: 1px solid var(--border); }
+#tbody-finanzas tr:last-child { border-bottom: none; }
+#tbody-finanzas td { padding: 13px 18px; }
+
+/* ── Canvas heights para egresos ── */
+#panel-egresos .chart-card,
+#panel-finanzas .chart-card {
+  position: relative;
+}
+
+#chart-eg-categoria,
+#chart-eg-dias {
+  max-height: 240px;
+  width: 100% !important;
+}
+
+#chart-fin-comparativa,
+#chart-fin-donut,
+#chart-fin-flujo {
+  max-height: 240px;
+  width: 100% !important;
+}
+
+#chart-fin-historico {
+  max-height: 260px;
+  width: 100% !important;
+}
+
+/* ── Responsive finanzas ── */
+@media (min-width: 768px) {
+  .fin-kpis-top {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .fin-charts-grid {
+    grid-template-columns: 1.5fr 1fr;
+  }
+}
+
+@media (min-width: 1200px) {
+  .fin-charts-grid {
+    grid-template-columns: 1.5fr 1fr;
+  }
+  .fin-chart-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Tabla finanzas min-width ajustado ── */
+#panel-finanzas .table-wrap table {
+  min-width: 600px;
+}
