@@ -14,7 +14,7 @@ let chartEgDias = null;
 // La anon key sola solo pasa RLS en SELECT. Para INSERT/PATCH/DELETE
 // con políticas "to authenticated", Supabase exige el JWT del usuario.
 // window.__authClient lo inyecta auth-guard.js que se carga antes.
-async function getWriteHeaders() {
+async function getAuthHeaders(prefer = null) {
   const session = await window.__authClient?.auth?.getSession?.();
   const jwt = session?.data?.session?.access_token;
   if (!jwt) throw new Error("Sesión expirada. Recarga la página e inicia sesión de nuevo.");
@@ -22,7 +22,7 @@ async function getWriteHeaders() {
     apikey:         SUPABASE_ANON_KEY,
     Authorization:  "Bearer " + jwt,
     "Content-Type": "application/json",
-    "Prefer":       "return=minimal",
+    ...(prefer ? { "Prefer": prefer } : {}),
   };
 }
 
@@ -77,7 +77,8 @@ async function buscarEgresos() {
   if (desc) query += `&descripcion=ilike.*${encodeQueryValue(desc)}*`;
 
   try {
-    const res = await fetch(query, { headers });
+    const rHeaders = await getAuthHeaders();
+    const res = await fetch(query, { headers: rHeaders });
     if (!res.ok) throw new Error("Error " + res.status);
     const data = await res.json();
     __egresosActuales = data;
@@ -301,7 +302,7 @@ async function guardarEgreso() {
   };
 
   try {
-    const wHeaders = await getWriteHeaders();
+    const wHeaders = await getAuthHeaders('return=minimal');
     let res;
     if (__modoEdicionEgreso) {
       // PATCH (actualizar)
@@ -336,7 +337,7 @@ async function eliminarEgreso(id) {
   if (!confirm("¿Confirmas que deseas eliminar este egreso? Esta acción no se puede deshacer.")) return;
 
   try {
-    const wHeaders = await getWriteHeaders();
+    const wHeaders = await getAuthHeaders('return=minimal');
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/egresos?id=eq.${encodeQueryValue(id)}`,
       { method: "DELETE", headers: wHeaders }

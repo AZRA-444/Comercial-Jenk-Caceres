@@ -9,6 +9,20 @@ let chartFinDonut       = null;
 let chartFinFlujo       = null;
 let chartFinHistorico   = null;
 
+// ── JWT de sesión para todas las peticiones a Supabase ──────
+// Con RLS activo, tanto SELECT como escrituras necesitan el token
+// del usuario autenticado, no solo la anon key.
+async function finGetAuthHeaders() {
+  const session = await window.__authClient?.auth?.getSession?.();
+  const jwt = session?.data?.session?.access_token;
+  if (!jwt) throw new Error("Sesión expirada. Recarga la página e inicia sesión de nuevo.");
+  return {
+    apikey:         SUPABASE_ANON_KEY,
+    Authorization:  "Bearer " + jwt,
+    "Content-Type": "application/json",
+  };
+}
+
 // ── Paleta consistente ──────────────────────────────────────
 const FIN_COLORS = {
   ingreso:        "#10b981",
@@ -39,7 +53,8 @@ async function fetchFacturasMes(mes) {
     : `${y}-${String(m + 1).padStart(2, "0")}-01T00:00:00`;
 
   const query = `${SUPABASE_URL}/rest/v1/facturas?select=total_usd,total_bs,created_at&created_at=gte.${inicio}&created_at=lt.${sig}`;
-  const res = await fetch(query, { headers });
+  const h = await finGetAuthHeaders();
+  const res = await fetch(query, { headers: h });
   if (!res.ok) throw new Error("Error facturas " + res.status);
   return res.json();
 }
@@ -53,7 +68,8 @@ async function fetchEgresosMes(mes) {
     : `${y}-${String(m + 1).padStart(2, "0")}-01`;
 
   const query = `${SUPABASE_URL}/rest/v1/egresos?select=tipo,monto_usd,fecha&fecha=gte.${inicio}&fecha=lt.${sig}`;
-  const res = await fetch(query, { headers });
+  const h = await finGetAuthHeaders();
+  const res = await fetch(query, { headers: h });
   if (!res.ok) throw new Error("Error egresos " + res.status);
   return res.json();
 }
